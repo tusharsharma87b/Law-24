@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { LawyerDirectoryCard } from '../../components/lawyer/LawyerDirectoryCard';
 import { Colors } from '../../constants/colors';
 import {
@@ -52,6 +52,8 @@ import {
   useLawyerFiltersStore,
   DEFAULT_SHEET_STORE,
 } from '../../store/useLawyerFiltersStore';
+import { LoadingScreen } from '../../components/ui/LoadingScreen';
+import { useLawyerDataStore } from '../../store/useLawyerDataStore';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -276,7 +278,8 @@ const FilterSheet = React.memo(function FilterSheet({
     onChange({ ...pending, [key]: value });
   }, [pending, onChange]);
 
-  if (!mounted) return null;
+  if (!mounted && visible) return <LoadingScreen message="Opening filters..." />;
+  if (!mounted) return <View pointerEvents="none" />;
 
   const quickRatingActive = pending.rating === '4.5';
   const quickBudgetActive = pending.price === 'under50';
@@ -402,7 +405,7 @@ type ActiveChipsProps = {
 };
 
 const ActiveFilterChips = React.memo(function ActiveFilterChips({ chips, onClearAll }: ActiveChipsProps) {
-  if (chips.length === 0) return null;
+  if (chips.length === 0) return <View pointerEvents="none" style={{ height: 0 }} />;
   return (
     <ScrollView
       horizontal
@@ -463,7 +466,7 @@ const SuggestionsDropdown = React.memo(function SuggestionsDropdown({
     }).start();
   }, [visible, fadeAnim]);
 
-  if (!visible) return null;
+  if (!visible) return <View pointerEvents="none" style={dd.hidden} />;
 
   return (
     // No full-screen backdrop — relying on TextInput onBlur + FlatList scroll to close.
@@ -702,6 +705,18 @@ export default function LawyersTabScreen() {
   const navigation = useNavigation();
   const { width: windowWidth } = useWindowDimensions();
   const horizontalCardWidth = Math.min(windowWidth * 0.88, 360);
+  const { directoryLawyers, hydrateLawyerData, hydrated, isHydrating } = useLawyerDataStore();
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hydrated) {
+        hydrateLawyerData();
+      } else if (isFirstLoad) {
+        setIsFirstLoad(false);
+      }
+    }, [hydrateLawyerData, hydrated, isFirstLoad]),
+  );
 
   // ── Read deep-link param (from Home navigation) ────────────────────────────
   const params = useLocalSearchParams<{ category?: string | string[] }>();
@@ -779,7 +794,8 @@ export default function LawyersTabScreen() {
   );
 
   const filtered = useMemo(() => {
-    const all = sortDirectoryLawyers(filterDirectoryLawyers(DIRECTORY_LAWYERS, directoryFilters), sort);
+    const source = directoryLawyers ?? DIRECTORY_LAWYERS;
+    const all = sortDirectoryLawyers(filterDirectoryLawyers(source, directoryFilters), sort);
     // Deduplicate alt-city rows — show each unique lawyer only once
     const seen = new Set<string>();
     return all.filter((l) => {
@@ -908,10 +924,10 @@ export default function LawyersTabScreen() {
     clearTimeout(suggestTimer.current);
     suggestTimer.current = setTimeout(() => {
       // Cap at 5 items for a compact, non-intrusive dropdown
-      setSuggestions(generateSuggestions(search, DIRECTORY_LAWYERS, 5));
+      setSuggestions(generateSuggestions(search, directoryLawyers ?? DIRECTORY_LAWYERS, 5));
     }, 300);
     return () => clearTimeout(suggestTimer.current);
-  }, [search]);
+  }, [search, directoryLawyers]);
 
   const showDropdown = searchFocused && suggestions.length > 0;
 
@@ -973,6 +989,10 @@ export default function LawyersTabScreen() {
       </TouchableOpacity>
     </View>
   ), [emptyMessage, clearAllFilters]);
+
+  if (isFirstLoad && isHydrating) {
+    return <LoadingScreen message="Loading lawyers..." />;
+  }
 
   return (
     <View style={styles.root}>
@@ -1357,6 +1377,7 @@ const sheetStyles = StyleSheet.create({
 // ─── Dropdown Styles ──────────────────────────────────────────────────────────
 
 const dd = StyleSheet.create({
+  hidden: { width: 0, height: 0 },
   container: {
     position: 'absolute',
     left: 12, right: 12,

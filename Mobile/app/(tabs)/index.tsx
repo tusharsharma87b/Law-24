@@ -1,15 +1,15 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, TouchableWithoutFeedback,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity,
   TextInput, Animated, Alert, useWindowDimensions, Dimensions, Platform, Keyboard,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/colors';
-import { LawyerCard, mapLawyerToCardModel } from '../../components/lawyer/LawyerCard';
-import { HOME_LEGAL_CATEGORIES } from '../../constants/homeLegalCategories';
+import { LawyerCard, mapLawyerToCardModel } from '../components/lawyer/LawyerCard';
+import { LEGAL_DEPARTMENTS } from '../../constants/legalDepartments';
 import { MOCK_LAWYERS } from '../../constants/mockData';
 import { DIRECTORY_LAWYERS } from '../../constants/lawyersDirectory';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -22,6 +22,8 @@ import {
   generateSuggestions,
   type SearchSuggestion,
 } from '../../constants/lawyerSearchSuggestions';
+import { useLawyerDataStore } from '../../store/useLawyerDataStore';
+import { LoadingScreen } from '../../components/ui/LoadingScreen';
 
 // ─── Category accent colours (for dropdown) ──────────────────────────────────
 const CAT_ACCENT: Partial<Record<string, string>> = {
@@ -45,15 +47,57 @@ export default function HomeScreen() {
   const categoryCardWidth = viewportWidth / 4.8;
   const categoryCardHeight = 88;
   const categoryGap = 10;
-  const expertCardWidth = viewportWidth * 0.6;
-  const topCardWidth = viewportWidth * 0.6;
-  const listGap = 12;
+  const expertCardWidth = 280;
+  const topCardWidth = 280;
+  const listGap = 14;
 
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const unreadCount = useUnreadCount();
   const { balance } = useWalletStore();
   const [notifSheetOpen, setNotifSheetOpen] = useState(false);
+  const { featuredLawyers, directoryLawyers, hydrateLawyerData, hydrated, isHydrating, preloadLawyerData } = useLawyerDataStore();
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hydrated) {
+        hydrateLawyerData();
+      } else if (isFirstLoad) {
+        setIsFirstLoad(false);
+      }
+    }, [hydrateLawyerData, hydrated, isFirstLoad]),
+  );
+
+  // ── Android hardware back button — exit confirmation ──────────────────────
+  // Only active when the Home screen is in focus.
+  // Prevents accidental app exit; does NOT touch auth state.
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+
+      const onBack = () => {
+        // If notification sheet is open, close it first (do not exit app)
+        if (notifSheetOpen) {
+          setNotifSheetOpen(false);
+          return true;
+        }
+        Alert.alert(
+          'Exit App?',
+          'Do you want to close Law24?',
+          [
+            { text: 'Stay', style: 'cancel' },
+            { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
+          ],
+          { cancelable: true },
+        );
+        return true; // consume the event — prevent default back behaviour
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+      return () => sub.remove();
+    }, [notifSheetOpen]),
+  );
 
   const openLawyers = (categoryParam?: string) => {
     if (categoryParam) {
@@ -90,7 +134,7 @@ export default function HomeScreen() {
   useEffect(() => {
     clearTimeout(sugTimer.current);
     sugTimer.current = setTimeout(() => {
-      const raw = generateSuggestions(search, DIRECTORY_LAWYERS);
+      const raw = generateSuggestions(search, directoryLawyers ?? DIRECTORY_LAWYERS);
       // Hard cap at 5 items for a compact dropdown
       setSuggestions(raw.slice(0, 5));
     }, 300);
@@ -171,61 +215,28 @@ export default function HomeScreen() {
     openRouteSheet(synth);
   }, [search, openRouteSheet, dismissSearch, router]);
   // ─────────────────────────────────────────────────────────────────────────
-  const liveExperts = MOCK_LAWYERS.filter((l) => l.isOnline);
-  const topRated = [...MOCK_LAWYERS].sort((a, b) => b.rating.average - a.rating.average);
+  const sourceLawyers = featuredLawyers ?? MOCK_LAWYERS;
+  const liveExperts = sourceLawyers.filter((l) => l.isOnline).slice(0, 3);
+  const topRated = [...sourceLawyers].filter((l) => l.rating.average > 4.7).sort((a, b) => b.rating.average - a.rating.average).slice(0, 3);
+  const fastResponse = [...sourceLawyers].filter((l) => l.responseTimeMinutes <= 2).slice(0, 3);
+  const budgetLawyers = [...sourceLawyers].filter((l) => l.fees.chatPerMinuteInr < 20).slice(0, 3);
   const [activeCategory, setActiveCategory] = useState(0);
   const [activeExpert, setActiveExpert] = useState(0);
   const [activeTopRated, setActiveTopRated] = useState(0);
+  const [activeFast, setActiveFast] = useState(0);
+  const [activeBudget, setActiveBudget] = useState(0);
 
   const categoryScrollX = useRef(new Animated.Value(0)).current;
   const expertsScrollX = useRef(new Animated.Value(0)).current;
   const topRatedScrollX = useRef(new Animated.Value(0)).current;
-  const fabPulse = useRef(new Animated.Value(1)).current;
-  const fabPress = useRef(new Animated.Value(1)).current;
-  const sheetAnim = useRef(new Animated.Value(0)).current;
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const fastScrollX = useRef(new Animated.Value(0)).current;
+  const budgetScrollX = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(fabPulse, { toValue: 1.08, duration: 900, useNativeDriver: true }),
-        Animated.timing(fabPulse, { toValue: 1, duration: 900, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [fabPulse]);
-
-  const sheetHeight = Math.round(windowHeight * 0.28);
-
-  const handleTalkToExpert = () => {
-    Alert.alert('Talk to Expert', 'Connect to a legal expert now?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Call Now', onPress: () => openLawyers() },
-    ]);
-  };
-
-  const openSheet = () => {
-    setSheetOpen(true);
-    Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 7 }).start();
-  };
-
-  const closeSheet = () => {
-    Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(({ finished }) => {
-      if (finished) setSheetOpen(false);
-    });
-  };
-
-  const onFabPressIn = () => {
-    Animated.spring(fabPress, { toValue: 0.94, useNativeDriver: true, speed: 22, bounciness: 6 }).start();
-  };
-
-  const onFabPressOut = () => {
-    Animated.spring(fabPress, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 8 }).start();
-  };
+  if (isFirstLoad && isHydrating) {
+    return <LoadingScreen message="Loading experts..." />;
+  }
 
   return (
-    <TouchableWithoutFeedback onPress={() => dismissSearch(false)} accessible={false}>
     <View style={s.root}>
       <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.bgPrimary }} />
 
@@ -253,7 +264,7 @@ export default function HomeScreen() {
             {/* Bell */}
             <TouchableOpacity
               style={s.iconBtn}
-              onPress={() => setNotifSheetOpen(true)}
+              onPress={() => setNotifSheetOpen((v) => !v)}
               activeOpacity={0.8}
               hitSlop={8}
             >
@@ -388,72 +399,31 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* LEGAL CATEGORIES */}
+        {/* ── DEPARTMENTS ── */}
         <View style={s.section}>
-          <SectionHeader title="Legal Categories" onAction={() => openLawyers()} />
-          <Animated.FlatList
-            data={HOME_LEGAL_CATEGORIES}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={s.catListFullBleed}
-            contentContainerStyle={s.catListContainer}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            snapToInterval={categoryCardWidth + categoryGap}
-            bounces={false}
-            removeClippedSubviews
-            initialNumToRender={5}
-            windowSize={5}
-            ListFooterComponent={<View style={{ width: 6 }} />}
-            getItemLayout={(_, index) => ({
-              length: categoryCardWidth + categoryGap,
-              offset: (categoryCardWidth + categoryGap) * index,
-              index,
-            })}
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / (categoryCardWidth + categoryGap));
-              setActiveCategory(Math.max(0, idx));
-            }}
-            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: categoryScrollX } } }], { useNativeDriver: true })}
-            scrollEventThrottle={16}
-            renderItem={({ item, index }) => {
-              const inputRange = [
-                (index - 1) * (categoryCardWidth + categoryGap),
-                index * (categoryCardWidth + categoryGap),
-                (index + 1) * (categoryCardWidth + categoryGap),
-              ];
-              const scale = categoryScrollX.interpolate({ inputRange, outputRange: [0.9, 1.05, 0.9], extrapolate: 'clamp' });
-              const opacity = categoryScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
-
-              return (
-                <Animated.View
-                  style={[
-                    s.catCardWrap,
-                    {
-                      width: categoryCardWidth,
-                      opacity,
-                      transform: [{ scale }],
-                    },
-                    index === activeCategory && s.activeGlow,
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={[s.catCard, { height: categoryCardHeight }]}
-                    activeOpacity={0.8}
-                    onPress={() => openLawyers(item.categoryParam)}
-                  >
-                    <View style={[s.catIcon, { backgroundColor: item.color + '22' }]}>
-                      <MaterialIcons name={item.icon as any} size={18} color={item.color} />
-                    </View>
-                    <Text style={s.catLabel} numberOfLines={2}>
-                      {item.label}
-                    </Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              );
-            }}
+          <SectionHeader
+            title="Legal Departments"
+            onAction={() => router.push('/departments' as any)}
           />
+          <Text style={s.deptSub}>Describe your problem — we'll find the right help</Text>
+
+          {/* 2-column grid of ALL departments — clean, no counts */}
+          <View style={s.deptGrid}>
+            {LEGAL_DEPARTMENTS.map((dept) => (
+              <TouchableOpacity
+                key={dept.id}
+                style={[s.deptCell, { borderColor: dept.color + '40' }]}
+                onPress={() => router.push({ pathname: '/department/[id]', params: { id: dept.id } })}
+                activeOpacity={0.84}
+              >
+                <View style={[s.deptCellIcon, { backgroundColor: dept.color + '1A' }]}>
+                  <MaterialIcons name={dept.icon as any} size={22} color={dept.color} />
+                </View>
+                <Text style={s.deptCellName} numberOfLines={2}>{dept.name}</Text>
+                <Text style={s.deptCellTagline} numberOfLines={2}>{dept.tagline}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {/* NOT SURE CARD */}
@@ -481,7 +451,7 @@ export default function HomeScreen() {
             decelerationRate="fast"
             snapToInterval={expertCardWidth + listGap}
             bounces={false}
-            removeClippedSubviews
+            removeClippedSubviews={false}
             initialNumToRender={5}
             windowSize={5}
             ListFooterComponent={<View style={{ width: 16 }} />}
@@ -502,23 +472,26 @@ export default function HomeScreen() {
                 index * (expertCardWidth + listGap),
                 (index + 1) * (expertCardWidth + listGap),
               ];
-              const scale = expertsScrollX.interpolate({ inputRange, outputRange: [0.9, 1.05, 0.9], extrapolate: 'clamp' });
-              const opacity = expertsScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
+              const scale = expertsScrollX.interpolate({ inputRange, outputRange: [0.94, 1, 0.94], extrapolate: 'clamp' });
+              const opacity = expertsScrollX.interpolate({ inputRange, outputRange: [0.86, 1, 0.86], extrapolate: 'clamp' });
 
               return (
                 <Animated.View
                   style={[
                     s.expertCard,
-                    { width: expertCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
-                    index === activeExpert && s.activeGlow,
+                    { width: expertCardWidth, opacity, transform: [{ scale }] },
                   ]}
                 >
-                  <LawyerCard
-                    data={mapLawyerToCardModel(item)}
-                    onPress={() => router.push({ pathname: '/lawyer/[id]', params: { id: item.id } })}
-                    ctaLabel="Talk Now"
-                    avatarSize={52}
-                  />
+                  <View style={s.cardWrapper}>
+                    <LawyerCard
+                      data={mapLawyerToCardModel(item)}
+                      onPress={() => {
+                        preloadLawyerData(item.id);
+                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
+                      }}
+                      ctaLabel="Talk Now"
+                    />
+                  </View>
                 </Animated.View>
               );
             }}
@@ -539,7 +512,7 @@ export default function HomeScreen() {
             decelerationRate="fast"
             snapToInterval={topCardWidth + listGap}
             bounces={false}
-            removeClippedSubviews
+            removeClippedSubviews={false}
             initialNumToRender={5}
             windowSize={5}
             ListFooterComponent={<View style={{ width: 16 }} />}
@@ -560,23 +533,146 @@ export default function HomeScreen() {
                 index * (topCardWidth + listGap),
                 (index + 1) * (topCardWidth + listGap),
               ];
-              const scale = topRatedScrollX.interpolate({ inputRange, outputRange: [0.9, 1.05, 0.9], extrapolate: 'clamp' });
-              const opacity = topRatedScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
+              const scale = topRatedScrollX.interpolate({ inputRange, outputRange: [0.94, 1, 0.94], extrapolate: 'clamp' });
+              const opacity = topRatedScrollX.interpolate({ inputRange, outputRange: [0.86, 1, 0.86], extrapolate: 'clamp' });
 
               return (
                 <Animated.View
                   style={[
                     s.topCard,
-                    { width: topCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
-                    index === activeTopRated && s.activeGlow,
+                    { width: topCardWidth, opacity, transform: [{ scale }] },
                   ]}
                 >
-                  <LawyerCard
-                    data={mapLawyerToCardModel(item)}
-                    onPress={() => router.push({ pathname: '/lawyer/[id]', params: { id: item.id } })}
-                    ctaLabel="Consult"
-                    avatarSize={44}
-                  />
+                  <View style={s.cardWrapper}>
+                    <LawyerCard
+                      data={mapLawyerToCardModel(item)}
+                      onPress={() => {
+                        preloadLawyerData(item.id);
+                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
+                      }}
+                      ctaLabel="Consult"
+                    />
+                  </View>
+                </Animated.View>
+              );
+            }}
+          />
+        </View>
+
+        {/* FAST RESPONSE */}
+        <View style={s.section}>
+          <SectionHeader title="Fast Response" onAction={() => openLawyers()} />
+          <Animated.FlatList
+            data={fastResponse}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={s.listFullBleed}
+            contentContainerStyle={s.listContainer}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            snapToInterval={topCardWidth + listGap}
+            bounces={false}
+            removeClippedSubviews={false}
+            initialNumToRender={5}
+            windowSize={5}
+            ListFooterComponent={<View style={{ width: 16 }} />}
+            getItemLayout={(_, index) => ({
+              length: topCardWidth + listGap,
+              offset: (topCardWidth + listGap) * index,
+              index,
+            })}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / (topCardWidth + listGap));
+              setActiveFast(Math.max(0, idx));
+            }}
+            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: fastScrollX } } }], { useNativeDriver: true })}
+            scrollEventThrottle={16}
+            renderItem={({ item, index }) => {
+              const inputRange = [
+                (index - 1) * (topCardWidth + listGap),
+                index * (topCardWidth + listGap),
+                (index + 1) * (topCardWidth + listGap),
+              ];
+              const scale = fastScrollX.interpolate({ inputRange, outputRange: [0.94, 1, 0.94], extrapolate: 'clamp' });
+              const opacity = fastScrollX.interpolate({ inputRange, outputRange: [0.86, 1, 0.86], extrapolate: 'clamp' });
+              return (
+                <Animated.View
+                  style={[
+                    s.topCard,
+                    { width: topCardWidth, opacity, transform: [{ scale }] },
+                  ]}
+                >
+                  <View style={s.cardWrapper}>
+                    <LawyerCard
+                      data={mapLawyerToCardModel(item)}
+                      onPress={() => {
+                        preloadLawyerData(item.id);
+                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
+                      }}
+                      ctaLabel="Talk Now"
+                    />
+                  </View>
+                </Animated.View>
+              );
+            }}
+          />
+        </View>
+
+        {/* BUDGET FRIENDLY */}
+        <View style={s.section}>
+          <SectionHeader title="Budget Friendly" onAction={() => openLawyers()} />
+          <Animated.FlatList
+            data={budgetLawyers}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={s.listFullBleed}
+            contentContainerStyle={s.listContainer}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            snapToInterval={topCardWidth + listGap}
+            bounces={false}
+            removeClippedSubviews={false}
+            initialNumToRender={5}
+            windowSize={5}
+            ListFooterComponent={<View style={{ width: 16 }} />}
+            getItemLayout={(_, index) => ({
+              length: topCardWidth + listGap,
+              offset: (topCardWidth + listGap) * index,
+              index,
+            })}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / (topCardWidth + listGap));
+              setActiveBudget(Math.max(0, idx));
+            }}
+            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: budgetScrollX } } }], { useNativeDriver: true })}
+            scrollEventThrottle={16}
+            renderItem={({ item, index }) => {
+              const inputRange = [
+                (index - 1) * (topCardWidth + listGap),
+                index * (topCardWidth + listGap),
+                (index + 1) * (topCardWidth + listGap),
+              ];
+              const scale = budgetScrollX.interpolate({ inputRange, outputRange: [0.94, 1, 0.94], extrapolate: 'clamp' });
+              const opacity = budgetScrollX.interpolate({ inputRange, outputRange: [0.86, 1, 0.86], extrapolate: 'clamp' });
+              return (
+                <Animated.View
+                  style={[
+                    s.topCard,
+                    { width: topCardWidth, opacity, transform: [{ scale }] },
+                  ]}
+                >
+                  <View style={s.cardWrapper}>
+                    <LawyerCard
+                      data={mapLawyerToCardModel(item)}
+                      onPress={() => {
+                        preloadLawyerData(item.id);
+                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
+                      }}
+                      ctaLabel="Consult"
+                    />
+                  </View>
                 </Animated.View>
               );
             }}
@@ -589,7 +685,8 @@ export default function HomeScreen() {
       {/* ── Autocomplete dropdown — animated, compact, max 5 items ── */}
       {(showDropdown || suggestions.length > 0) && (
         <Animated.View
-          style={[s.dropWrap, { top: fixedTopH, opacity: dropFade, pointerEvents: showDropdown ? 'auto' : 'none' } as any]}
+          pointerEvents={showDropdown ? 'auto' : 'none'}
+          style={[s.dropWrap, { top: fixedTopH, opacity: dropFade }]}
         >
           {suggestions.map((sug, idx) => {
             const accent = sug.category ? (CAT_ACCENT[sug.category] ?? Colors.primary) : Colors.primary;
@@ -690,82 +787,16 @@ export default function HomeScreen() {
         onClose={() => setNotifSheetOpen(false)}
       />
 
-      <Animated.View style={[s.fabWrap, { transform: [{ scale: fabPulse }, { scale: fabPress }] }]}>
-        <TouchableOpacity activeOpacity={0.92} onPress={openSheet} onPressIn={onFabPressIn} onPressOut={onFabPressOut}>
-          <LinearGradient
-            colors={['#4F6BFF', '#7C3AED']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={s.fab}
-          >
-            <MaterialIcons name="auto-awesome" size={24} color="#fff" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
-
-      {sheetOpen && (
-        <>
-          <Animated.View style={[s.sheetBackdrop, { opacity: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.4] }) }]}>
-            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeSheet} />
-          </Animated.View>
-          <Animated.View
-            style={[
-              s.bottomSheet,
-              { maxHeight: sheetHeight },
-              {
-                transform: [
-                  {
-                    translateY: sheetAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [sheetHeight + 40, 0],
-                    }),
-                  },
-                ],
-                opacity: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }),
-              },
-            ]}
-          >
-            <View style={s.sheetHandle} />
-            <TouchableOpacity
-              style={s.sheetAction}
-              activeOpacity={0.85}
-              onPress={() => {
-                closeSheet();
-                router.push('/nyaya');
-              }}
-            >
-              <View style={[s.sheetIconWrap, { backgroundColor: Colors.primarySubtle }]}>
-                <MaterialIcons name="auto-awesome" size={18} color={Colors.primary} />
-              </View>
-              <Text style={s.sheetActionText}>Ask NyayaAI</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={s.sheetAction}
-              activeOpacity={0.85}
-              onPress={() => {
-                closeSheet();
-                handleTalkToExpert();
-              }}
-            >
-              <View style={[s.sheetIconWrap, { backgroundColor: Colors.dangerSubtle }]}>
-                <MaterialIcons name="phone" size={18} color={Colors.danger} />
-              </View>
-              <Text style={s.sheetActionText}>Talk to Expert (Call)</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </>
-      )}
     </View>
-    </TouchableWithoutFeedback>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.bgPrimary, overflow: 'hidden' },
+  root: { flex: 1, backgroundColor: '#020617', width: '100%', maxWidth: '100%' },
 
   // Fixed top bar
   fixedTop: {
-    backgroundColor: Colors.bgPrimary,
+    backgroundColor: '#020617',
     paddingHorizontal: 16,
     paddingBottom: 8,
     borderBottomWidth: 1,
@@ -804,8 +835,8 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, color: Colors.textPrimary, fontSize: 13, paddingVertical: 0 },
   micBtn: { padding: 2 },
 
-  chips: { marginTop: 10, marginHorizontal: -16 },
-  chipsContent: { paddingHorizontal: 16, gap: 8, flexDirection: 'row' },
+  chips: { marginTop: 10 },
+  chipsContent: { gap: 8, flexDirection: 'row' },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: Colors.primarySubtle,
@@ -892,10 +923,22 @@ const s = StyleSheet.create({
   aiTrustBlock: { marginTop: 10, flexDirection: 'row', justifyContent: 'center', gap: 16 },
   aiTrustLine:{ color: Colors.textTertiary, fontSize: 11, fontWeight: '500' },
   section:{ marginBottom: 20 },
-  listFullBleed: { marginTop: 14, marginHorizontal: -16 },
-  listContainer: { paddingHorizontal: 16 },
-  catListFullBleed: { marginTop: 14, marginHorizontal: -16 },
-  catListContainer: { paddingLeft: 16, paddingRight: 6 },
+
+  // Departments — clean 2-column grid, no counts
+  deptSub: { fontSize: 12, color: Colors.textSecondary, marginBottom: 14, marginTop: -4 },
+  deptGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  deptCell: {
+    width: '47%', flexGrow: 1,
+    backgroundColor: Colors.bgSecondary, borderRadius: 18, padding: 14,
+    gap: 8, borderWidth: 1, minWidth: 140,
+  },
+  deptCellIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  deptCellName: { fontSize: 13, fontWeight: '800', color: Colors.textPrimary },
+  deptCellTagline: { fontSize: 11, color: Colors.textSecondary, lineHeight: 16 },
+  listFullBleed: { marginTop: 14, overflow: 'visible' },
+  listContainer: { paddingLeft: 16, paddingRight: 12, paddingVertical: 10 },
+  catListFullBleed: { marginTop: 14 },
+  catListContainer: { paddingRight: 6 },
   catCardWrap: { marginRight: 10 },
   catCard:{ alignItems: 'center', justifyContent: 'center', padding: 8, backgroundColor: Colors.bgSecondary, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, gap: 6 },
   catIcon:{ width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
@@ -905,83 +948,7 @@ const s = StyleSheet.create({
   notSureSub:{ color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
   notSureBtn:{ backgroundColor: Colors.primarySubtle, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(59,91,219,0.25)' },
   notSureBtnTxt:{ color: Colors.primary, fontSize: 13, fontWeight: '700' },
-  expertCard:{ alignItems: 'stretch' },
-  topCard:{ alignItems: 'stretch' },
-  activeGlow: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.38,
-    shadowRadius: 10,
-    elevation: 7,
-  },
-  fabWrap: {
-    position: 'absolute',
-    bottom: 110,
-    right: 20,
-    zIndex: 10,
-    shadowColor: '#4F6BFF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 14,
-    elevation: 12,
-  },
-  fab: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
-    zIndex: 11,
-  },
-  bottomSheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: Colors.bgSecondary,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    paddingTop: 8,
-    zIndex: 12,
-  },
-  sheetHandle: {
-    width: 42,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginBottom: 14,
-  },
-  sheetAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    height: 52,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    backgroundColor: Colors.bgElevated,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-    marginBottom: 10,
-  },
-  sheetIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetActionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
+  expertCard:{ alignItems: 'stretch', overflow: 'visible' },
+  topCard:{ alignItems: 'stretch', overflow: 'visible' },
+  cardWrapper: { marginRight: 14, padding: 6, paddingBottom: 8 },
 });

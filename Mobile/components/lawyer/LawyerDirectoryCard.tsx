@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Avatar } from '../ui/Avatar';
 import { Colors } from '../../constants/colors';
 import type { DirectoryLawyer } from '../../constants/lawyersDirectory';
+import { AppIcon } from '../ui/AppIcon';
 
 type Props = {
   item: DirectoryLawyer;
@@ -16,17 +16,31 @@ export const LawyerDirectoryCard = React.memo(function LawyerDirectoryCard({ ite
   const priceDisplay = `₹${item.pricePerMin}/min`;
   const expDisplay = `${item.experience} yr${item.experience !== 1 ? 's' : ''} exp`;
 
+  const handleNotify = () => {
+    Alert.alert('Get notified', `We’ll notify you when ${item.name} is online.`, [{ text: 'OK' }]);
+    console.log('Notify request:', item.id);
+  };
+
+  const isBusy = item.online && item.queue > 0;
+
   return (
     <TouchableOpacity
       style={[styles.card, rail && styles.cardRail]}
       onPress={onPress}
       activeOpacity={0.86}
     >
-      {/* Online badge — top-right corner */}
-      {item.online && (
+      {/* Availability badge */}
+      {item.online && !isBusy ? (
         <View style={styles.onlineBadge}>
-          <View style={styles.onlineDot} />
           <Text style={styles.onlineTxt}>Online</Text>
+        </View>
+      ) : isBusy ? (
+        <View style={styles.busyBadge}>
+          <Text style={styles.busyTxt}>Busy</Text>
+        </View>
+      ) : (
+        <View style={styles.offlineBadge}>
+          <Text style={styles.offlineTxt}>Offline • {item.lastSeen ?? 'Recently'}</Text>
         </View>
       )}
 
@@ -48,7 +62,7 @@ export const LawyerDirectoryCard = React.memo(function LawyerDirectoryCard({ ite
 
           {/* Rating row */}
           <View style={styles.ratingRow}>
-            <MaterialIcons name="star" size={13} color={Colors.gold} />
+            <AppIcon name="rating" size={13} color={Colors.gold} />
             <Text style={styles.rating}>{item.rating.toFixed(1)}</Text>
             <Text style={styles.reviews}>({item.reviews})</Text>
             <View style={styles.dot} />
@@ -60,12 +74,12 @@ export const LawyerDirectoryCard = React.memo(function LawyerDirectoryCard({ ite
       {/* Stats row */}
       <View style={styles.statsRow}>
         <View style={styles.stat}>
-          <MaterialIcons name="schedule" size={12} color={Colors.textTertiary} />
+          <AppIcon name="time" size={12} color={Colors.textTertiary} />
           <Text style={styles.statTxt}>{item.responseTime}</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.stat}>
-          <MaterialIcons name="language" size={12} color={Colors.textTertiary} />
+          <AppIcon name="language" size={12} color={Colors.textTertiary} />
           <Text style={styles.statTxt} numberOfLines={1}>{langLine}</Text>
         </View>
         <View style={styles.statDivider} />
@@ -74,15 +88,33 @@ export const LawyerDirectoryCard = React.memo(function LawyerDirectoryCard({ ite
         </View>
       </View>
 
-      {/* CTA */}
-      <TouchableOpacity style={[styles.cta, !item.online && styles.ctaOffline]} onPress={onPress} activeOpacity={0.85}>
-        <MaterialIcons
-          name={item.online ? 'video-call' : 'schedule'}
-          size={16}
-          color="#fff"
-        />
-        <Text style={styles.ctaTxt}>{item.online ? 'Talk Now' : 'Book Call'}</Text>
-      </TouchableOpacity>
+      <Text style={styles.debugLine}>
+        {item.name} - {item.online ? 'ONLINE' : 'OFFLINE'} - Queue: {item.queue}
+      </Text>
+
+      {/* CTA logic */}
+      {item.online && item.queue === 0 ? (
+        <TouchableOpacity style={styles.primaryBtn} onPress={onPress} activeOpacity={0.85}>
+          <Text style={styles.primaryBtnTxt}>Talk Now</Text>
+        </TouchableOpacity>
+      ) : item.online && item.queue > 0 ? (
+        <View style={styles.busyWrap}>
+          <Text style={styles.queueText}>{item.queue} in queue • ~5 min wait</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={onPress} activeOpacity={0.85}>
+            <Text style={styles.primaryBtnTxt}>Join Queue</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.offlineActions}>
+          <Text style={styles.offlineLastSeen}>Last seen {item.lastSeen ?? 'recently'}</Text>
+          <TouchableOpacity style={styles.notifyBtn} onPress={handleNotify} activeOpacity={0.85}>
+            <Text style={styles.notifyBtnTxt}>Notify when available</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.outlineBtn} onPress={onPress} activeOpacity={0.85}>
+            <Text style={styles.outlineBtnTxt}>Book Appointment</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </TouchableOpacity>
   );
 });
@@ -104,16 +136,25 @@ const styles = StyleSheet.create({
   },
   cardRail: { marginBottom: 0 },
 
-  // Online badge — top right absolute
+  // Availability badges
   onlineBadge: {
     position: 'absolute', top: 14, right: 14,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(34,197,94,0.15)',
-    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
-    borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)',
+    backgroundColor: '#064E3B',
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
   },
-  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
-  onlineTxt: { fontSize: 10, fontWeight: '700', color: Colors.success },
+  onlineTxt: { fontSize: 11, fontWeight: '700', color: '#22C55E' },
+  busyBadge: {
+    position: 'absolute', top: 14, right: 14,
+    backgroundColor: '#78350F',
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+  },
+  busyTxt: { fontSize: 11, fontWeight: '700', color: '#FBBF24' },
+  offlineBadge: {
+    position: 'absolute', top: 14, right: 14,
+    backgroundColor: '#1F2937',
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+  },
+  offlineTxt: { fontSize: 11, fontWeight: '600', color: '#D1D5DB' },
 
   topRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   meta: { flex: 1, minWidth: 0, paddingRight: 52 },
@@ -137,11 +178,36 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, height: 14, backgroundColor: Colors.border },
   price: { fontSize: 12, fontWeight: '700', color: Colors.gold },
 
-  cta: {
+  debugLine: {
+    color: Colors.textTertiary,
+    fontSize: 10,
+    marginBottom: 8,
+  },
+  primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     height: 44, borderRadius: 12,
     backgroundColor: Colors.primary,
   },
-  ctaOffline: { backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border },
-  ctaTxt: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
+  primaryBtnTxt: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
+  busyWrap: { gap: 8 },
+  queueText: { color: '#FBBF24', fontSize: 11, fontWeight: '600' },
+  offlineActions: { gap: 8 },
+  offlineLastSeen: { color: '#9CA3AF', fontSize: 11 },
+  notifyBtn: {
+    backgroundColor: '#1F2937',
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notifyBtnTxt: { color: '#D1D5DB', fontSize: 14, fontWeight: '500' },
+  outlineBtn: {
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outlineBtnTxt: { color: '#9CA3AF', fontSize: 13, fontWeight: '600' },
 });

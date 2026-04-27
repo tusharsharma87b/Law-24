@@ -1,129 +1,255 @@
-import React, { useState } from 'react';
+/**
+ * Case OS — redesigned for layman users.
+ *
+ * Design principles:
+ *  • One screen = one case in focus
+ *  • Show "what to do next" — not just status
+ *  • Plain English everywhere, no legal jargon
+ *  • Every section has a clear action button
+ */
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Platform,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, FlatList, TextInput,
+  Platform, Alert, Linking,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { CaseActionsSheet } from '../../components/case/CaseActionsSheet';
+import { ChangeLawyerFlowSheet } from '../../components/lawyer/ChangeLawyerFlowSheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { MOCK_CASES } from '../../constants/mockData';
+import { getNextStep, useCaseStore, type CaseDocument } from '../../store/useCaseStore';
+import { sendNotification } from '../../store/useNotificationStore';
+import { useChatStore } from '../../store/useChatStore';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type CaseData = typeof MOCK_CASES[0];
-type Document = { id: string; name: string; category: 'court' | 'personal' | 'evidence'; uploadedBy: string; date: string; size: string };
-type TimelineEvent = { id: string; date: string; time: string; type: 'urgent' | 'done' | 'info' | 'action'; title: string; desc: string; action?: string; people: string[] };
-type PendingAction = { id: string; task: string; due: string; priority: 'critical' | 'high' | 'medium' };
+type AnyCase = typeof MOCK_CASES[0] & Record<string, any>;
 
-const TABS = ['Overview', 'Timeline', 'Documents', 'AI Chat', 'Lawyer'];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const URGENCY_CFG: Record<string, { color: string; bg: string }> = {
+/** Human-readable name for each case (shown in the selector tab) */
+function getFriendlyName(c: AnyCase): string {
+  const t = c.title.toLowerCase();
+  if (t.includes('498a') || t.includes('cruelty'))     return '498A\nHarassment';
+  if (t.includes('125') || t.includes('maintenance'))   return 'Maintenance';
+  if (t.includes('section 9') || t.includes('restitut')) return 'Living\nTogether';
+  if (t.includes('domestic') || t.includes('dv act'))   return 'DV\nViolence';
+  if (t.includes('wrongful') || t.includes('terminat')) return 'Job\nTermination';
+  if (t.includes('divorce'))                            return 'Divorce';
+  if (t.includes('custody'))                            return 'Child\nCustody';
+  return (c.chips[0] ?? c.title.split('—')[0].trim()).slice(0, 14);
+}
+
+/** Friendly category header — "Matrimonial Cases" not "matrimonial" */
+function getCategoryLabel(cat: string): string {
+  const map: Record<string, string> = {
+    matrimonial: 'Matrimonial Cases',
+    employment: 'Employment Cases',
+    criminal: 'Criminal Cases',
+    property: 'Property Cases',
+    civil: 'Civil Cases',
+    corporate: 'Corporate Cases',
+    cyber: 'Cyber Cases',
+    banking: 'Banking Cases',
+    consumer: 'Consumer Cases',
+    litigation: 'Litigation Cases',
+  };
+  return map[cat] ?? 'My Cases';
+}
+
+/** Days until next hearing — plain language */
+function getDaysUntil(dateStr: string | undefined): string {
+  if (!dateStr) return '';
+  const months: Record<string, number> = {
+    Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11,
+  };
+  const m = dateStr.match(/(\d{1,2})\s+(\w{3})\s+(\d{4})/);
+  if (!m) return '';
+  const target = new Date(Number(m[3]), months[m[2]] ?? 0, Number(m[1]));
+  const today  = new Date(); today.setHours(0,0,0,0);
+  const diff   = Math.ceil((target.getTime() - today.getTime()) / 86400000);
+  if (diff < 0)  return 'Passed';
+  if (diff === 0) return 'Today!';
+  if (diff === 1) return 'Tomorrow!';
+  if (diff <= 7)  return `In ${diff} days ⚡`;
+  if (diff <= 30) return `In ${diff} days`;
+  return `In ~${Math.round(diff / 30)} months`;
+}
+
+/** Urgency label → colour */
+const URG: Record<string, { color: string; bg: string }> = {
   critical: { color: Colors.danger,  bg: Colors.dangerSubtle },
   high:     { color: Colors.warning, bg: Colors.warningSubtle },
   medium:   { color: Colors.blue,    bg: Colors.blueSubtle },
   low:      { color: Colors.success, bg: Colors.successSubtle },
 };
 
-const DOT_COLOR: Record<string, string> = {
-  urgent: Colors.danger, done: Colors.success, info: Colors.primary, action: Colors.gold,
+/** Priority → colour */
+const PRI = URG;
+
+/** Dot colour for timeline types */
+const DOT: Record<string, string> = {
+  urgent: Colors.danger, done: Colors.success,
+  info: Colors.primary, action: Colors.gold,
+  hearing: Colors.warning,
+  filing: Colors.primary,
+  evidence: Colors.success,
+  note: Colors.blue,
+  update: Colors.primary,
+  document: Colors.blue,
+  lawyer: Colors.gold,
+  order: Colors.success,
+  support: Colors.warning,
 };
 
-const DOC_CAT_ICON: Record<string, string> = {
-  court: 'account-balance', personal: 'person', evidence: 'find-in-page',
-};
-
-const DOC_CAT_COLOR: Record<string, string> = {
-  court: Colors.primary, personal: Colors.gold, evidence: Colors.success,
-};
-
-// ─── Overview Tab ─────────────────────────────────────────────────────────────
-function OverviewTab({ caseData }: { caseData: CaseData }) {
-  const c = caseData as any;
-  const urg = URGENCY_CFG[caseData.urgency] ?? URGENCY_CFG.medium;
+// ─── Case Selector Bar ────────────────────────────────────────────────────────
+function CaseSelector({
+  allCases,
+  activeId,
+  onSelect,
+  onAdd,
+}: {
+  allCases: AnyCase[];
+  activeId: string;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
+}) {
+  const activeCat  = allCases.find((c) => c.id === activeId)?.category ?? '';
+  const peers      = allCases.filter((c) => c.category === activeCat);
+  const otherCount = allCases.filter((c) => c.category !== activeCat).length;
 
   return (
-    <View style={ov.root}>
+    <View style={cs.wrap}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={cs.row}>
+        {peers.map((p) => {
+          const active = p.id === activeId;
+          const u = URG[p.urgency] ?? URG.medium;
+          return (
+            <TouchableOpacity
+              key={p.id}
+              style={[cs.tab, active && cs.tabActive]}
+              onPress={() => onSelect(p.id)}
+              activeOpacity={0.8}
+            >
+              {active && <View style={[cs.tabDot, { backgroundColor: u.color }]} />}
+              <Text style={[cs.tabTxt, active && cs.tabTxtActive]} numberOfLines={2}>
+                {getFriendlyName(p)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+        {/* + Add */}
+        <TouchableOpacity style={cs.addTab} onPress={onAdd} activeOpacity={0.8}>
+          <MaterialIcons name="add" size={16} color={Colors.primary} />
+          <Text style={cs.addTxt}>Add</Text>
+        </TouchableOpacity>
+      </ScrollView>
+      {/* Show other-category count if any */}
+      {otherCount > 0 && (
+        <View style={cs.otherPill}>
+          <Text style={cs.otherTxt}>{otherCount} other {otherCount === 1 ? 'case' : 'cases'}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
-      {/* ── Next hearing highlight ── */}
-      {c.nextHearing && (
-        <LinearGradient colors={['rgba(59,91,219,0.15)', 'rgba(59,91,219,0.05)']} style={ov.hearingCard}>
-          <View style={ov.hearingLeft}>
-            <MaterialIcons name="event" size={20} color={Colors.primary} />
-            <View>
-              <Text style={ov.hearingLabel}>Next Hearing</Text>
-              <Text style={ov.hearingDate}>{c.nextHearing}</Text>
+// ─── "What To Do" Tab ────────────────────────────────────────────────────────
+function WhatToDoTab({
+  c,
+  onGoToDocs,
+  onGoToAI,
+  onRemind,
+}: {
+  c: AnyCase;
+  onGoToDocs: () => void;
+  onGoToAI: () => void;
+  onRemind: () => void;
+}) {
+  const u = URG[c.urgency] ?? URG.medium;
+  const days = getDaysUntil(c.nextHearing);
+  const dynamicNextStep = getNextStep(c as any);
+
+  return (
+    <View style={td.root}>
+
+      {/* ── "Your Next Step" hero card ── */}
+      {(c.nextAction || dynamicNextStep) && (
+        <LinearGradient
+          colors={[u.color + '22', u.color + '08']}
+          style={[td.nextCard, { borderColor: u.color + '44' }]}
+        >
+          <View style={td.nextTop}>
+            <View style={[td.nextIcon, { backgroundColor: u.color + '22' }]}>
+              <MaterialIcons name="arrow-circle-right" size={22} color={u.color} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={td.nextLabel}>Your Next Step</Text>
+              <Text style={td.nextAction}>{dynamicNextStep}</Text>
             </View>
           </View>
-          <TouchableOpacity style={ov.reminderBtn} activeOpacity={0.8}>
-            <MaterialIcons name="notifications-active" size={14} color={Colors.primary} />
-            <Text style={ov.reminderTxt}>Remind me</Text>
+          <TouchableOpacity style={[td.nextBtn, { backgroundColor: u.color }]} onPress={onGoToDocs} activeOpacity={0.85}>
+            <MaterialIcons name="upload-file" size={14} color="#fff" />
+            <Text style={td.nextBtnTxt}>Upload Documents</Text>
           </TouchableOpacity>
         </LinearGradient>
       )}
 
-      {/* ── Stats 2×2 grid ── */}
-      <View style={ov.statsGrid}>
+      {/* ── Next Hearing countdown ── */}
+      {c.nextHearing && (
+        <View style={td.hearingCard}>
+          <View style={td.hearingLeft}>
+            <MaterialIcons name="event" size={22} color={Colors.primary} />
+            <View>
+              <Text style={td.hearingLabel}>Next Court Hearing</Text>
+              <Text style={td.hearingDate}>{c.nextHearing}</Text>
+              {days ? <Text style={[td.hearingCountdown, days.includes('⚡') && { color: Colors.warning }]}>{days}</Text> : null}
+            </View>
+          </View>
+          <TouchableOpacity style={td.remindBtn} activeOpacity={0.8} onPress={onRemind}>
+            <MaterialIcons name="notifications-active" size={13} color={Colors.primary} />
+            <Text style={td.remindTxt}>Remind me</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Simple status grid ── */}
+      <View style={td.statusGrid}>
         {[
-          { v: `${caseData.successProbability}%`, l: 'Win Probability', icon: 'emoji-events', color: Colors.gold },
-          { v: caseData.stage, l: 'Current Stage', icon: 'timeline', color: Colors.primary },
-          { v: c.caseNumber ?? 'N/A', l: 'Case No.', icon: 'folder', color: Colors.success },
-          { v: c.filedDate ?? 'N/A', l: 'Filed On', icon: 'calendar-today', color: Colors.blue },
+          { icon: 'emoji-events', color: Colors.gold, top: `${c.successProbability}%`, bot: 'Winning Chance' },
+          { icon: 'timeline',     color: Colors.primary, top: c.stage ?? 'Filing', bot: 'Current Stage' },
+          { icon: 'folder',       color: Colors.success, top: c.caseNumber ?? 'Pending', bot: 'Case Number' },
+          { icon: 'update',       color: Colors.blue, top: c.nextHearing ?? '—', bot: 'Next Hearing' },
         ].map((st) => (
-          <View key={st.l} style={ov.statCard}>
-            <View style={[ov.statIcon, { backgroundColor: st.color + '1A' }]}>
+          <View key={st.bot} style={td.statusCard}>
+            <View style={[td.statusIcon, { backgroundColor: st.color + '1A' }]}>
               <MaterialIcons name={st.icon as any} size={16} color={st.color} />
             </View>
-            <Text style={ov.statVal} numberOfLines={2}>{st.v}</Text>
-            <Text style={ov.statLbl}>{st.l}</Text>
+            <Text style={td.statusTop} numberOfLines={1}>{st.top}</Text>
+            <Text style={td.statusBot}>{st.bot}</Text>
           </View>
         ))}
       </View>
 
-      {/* ── Court & Judge ── */}
-      {c.court && (
-        <View style={ov.courtCard}>
-          <View style={ov.courtRow}>
-            <MaterialIcons name="account-balance" size={15} color={Colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={ov.courtLabel}>Court</Text>
-              <Text style={ov.courtValue}>{c.court}</Text>
-            </View>
-          </View>
-          {c.judge && (
-            <View style={[ov.courtRow, { marginTop: 8 }]}>
-              <MaterialIcons name="person-outline" size={15} color={Colors.textSecondary} />
-              <View style={{ flex: 1 }}>
-                <Text style={ov.courtLabel}>Presiding Judge</Text>
-                <Text style={ov.courtValue}>{c.judge}</Text>
-              </View>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* ── Pending Actions ── */}
+      {/* ── Pending actions — plain language ── */}
       {c.pendingActions?.length > 0 && (
-        <View style={ov.section}>
-          <View style={ov.sectionHeader}>
-            <MaterialIcons name="pending-actions" size={16} color={Colors.warning} />
-            <Text style={ov.sectionTitle}>Pending Actions</Text>
-            <View style={ov.badge}>
-              <Text style={ov.badgeTxt}>{c.pendingActions.length}</Text>
-            </View>
-          </View>
-          {(c.pendingActions as PendingAction[]).map((pa) => {
-            const pCfg = URGENCY_CFG[pa.priority] ?? URGENCY_CFG.medium;
+        <View style={td.section}>
+          <Text style={td.sectionTitle}>Things You Must Do</Text>
+          <Text style={td.sectionSub}>Complete these before your next court date</Text>
+          {(c.pendingActions as any[]).map((pa: any) => {
+            const p = PRI[pa.priority] ?? PRI.medium;
             return (
-              <View key={pa.id} style={ov.actionItem}>
-                <View style={[ov.actionDot, { backgroundColor: pCfg.color }]} />
+              <View key={pa.id} style={td.actionRow}>
+                <View style={[td.actionDot, { backgroundColor: p.color }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={ov.actionTask}>{pa.task}</Text>
-                  <Text style={ov.actionDue}>Due: {pa.due}</Text>
+                  <Text style={td.actionTask}>{pa.task}</Text>
+                  <Text style={td.actionDue}>Complete by {pa.due}</Text>
                 </View>
-                <View style={[ov.priorityTag, { backgroundColor: pCfg.bg }]}>
-                  <Text style={[ov.priorityTxt, { color: pCfg.color }]}>
-                    {pa.priority.toUpperCase()}
+                <View style={[td.actionTag, { backgroundColor: p.bg }]}>
+                  <Text style={[td.actionTagTxt, { color: p.color }]}>
+                    {pa.priority === 'critical' ? 'Must do' : pa.priority === 'high' ? 'Important' : 'Optional'}
                   </Text>
                 </View>
               </View>
@@ -132,64 +258,60 @@ function OverviewTab({ caseData }: { caseData: CaseData }) {
         </View>
       )}
 
-      {/* ── AI Strategy ── */}
-      <View style={ov.aiCard}>
-        <View style={ov.aiHeader}>
-          <MaterialIcons name="auto-awesome" size={18} color={Colors.gold} />
-          <Text style={ov.aiTitle}>NyayaAI Strategy</Text>
-        </View>
-        <Text style={ov.aiText}>{caseData.aiStrategy}</Text>
-        {c.aiSteps && (
-          <View style={ov.stepsBlock}>
-            {(c.aiSteps as string[]).map((step, i) => (
-              <View key={i} style={ov.stepRow}>
-                <View style={ov.stepNum}><Text style={ov.stepNumTxt}>{i + 1}</Text></View>
-                <Text style={ov.stepTxt}>{step.replace(/^\d+\.\s*/, '')}</Text>
-              </View>
-            ))}
+      {/* ── AI guidance — plain language ── */}
+      {c.aiStrategy && (
+        <View style={td.aiCard}>
+          <View style={td.aiHeader}>
+            <MaterialIcons name="auto-awesome" size={17} color={Colors.gold} />
+            <Text style={td.aiTitle}>What Should You Do?</Text>
           </View>
-        )}
-        <TouchableOpacity style={ov.aiCta} activeOpacity={0.85}>
-          <MaterialIcons name="chat" size={14} color={Colors.primary} />
-          <Text style={ov.aiCtaTxt}>Ask AI follow-up</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Similar Cases (Premium Insight) ── */}
-      {c.similarCases?.length > 0 && (
-        <View style={ov.section}>
-          <View style={ov.sectionHeader}>
-            <MaterialIcons name="insights" size={16} color={Colors.gold} />
-            <Text style={ov.sectionTitle}>Similar Case Outcomes</Text>
-          </View>
-          <View style={ov.similarRow}>
-            {(c.similarCases as { result: string; probability: string; note: string }[]).map((sc, i) => (
-              <View key={i} style={[ov.similarCard, { borderColor: sc.result === 'Won' ? Colors.success : Colors.gold }]}>
-                <View style={[ov.similarResultPill, { backgroundColor: sc.result === 'Won' ? Colors.successSubtle : Colors.goldSubtle }]}>
-                  <Text style={[ov.similarResult, { color: sc.result === 'Won' ? Colors.success : Colors.gold }]}>{sc.result}</Text>
+          <Text style={td.aiText}>{c.aiStrategy}</Text>
+          {c.aiSteps && (
+            <View style={td.stepsBlock}>
+              {(c.aiSteps as string[]).slice(0, 3).map((step: string, i: number) => (
+                <View key={i} style={td.stepRow}>
+                  <View style={td.stepNum}><Text style={td.stepNumTxt}>{i + 1}</Text></View>
+                  <Text style={td.stepTxt}>{step.replace(/^\d+\.\s*/, '')}</Text>
                 </View>
-                <Text style={ov.similarProb}>{sc.probability}</Text>
-                <Text style={ov.similarNote}>{sc.note}</Text>
-              </View>
-            ))}
+              ))}
+            </View>
+          )}
+          <TouchableOpacity style={td.aiCta} onPress={onGoToAI} activeOpacity={0.85}>
+            <MaterialIcons name="chat" size={13} color={Colors.primary} />
+            <Text style={td.aiCtaTxt}>Ask more questions</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Similar outcomes ── */}
+      {c.similarCases?.length > 0 && (
+        <View style={td.section}>
+          <Text style={td.sectionTitle}>Cases Like Yours</Text>
+          <Text style={td.sectionSub}>How similar cases have ended</Text>
+          <View style={td.similarRow}>
+            {(c.similarCases as any[]).map((sc: any, i: number) => {
+              const isGood = ['Won', 'Acquitted', 'Resolved'].includes(sc.result);
+              return (
+                <View key={i} style={[td.simCard, { borderColor: isGood ? Colors.success : Colors.gold }]}>
+                  <Text style={[td.simResult, { color: isGood ? Colors.success : Colors.gold }]}>{sc.result}</Text>
+                  <Text style={td.simProb}>{sc.probability}</Text>
+                  <Text style={td.simNote}>{sc.note}</Text>
+                </View>
+              );
+            })}
           </View>
         </View>
       )}
 
-      {/* ── Quick Actions ── */}
-      <View style={ov.quickGrid}>
+      {/* ── Quick action buttons ── */}
+      <View style={td.quickGrid}>
         {[
-          { icon: 'upload-file', label: 'Add Docs', sub: `${c.documents?.length ?? 0} uploaded`, color: Colors.primary },
-          { icon: 'phone',       label: 'Call Lawyer', sub: c.lawyer?.name?.split(' ').pop() ?? 'Lawyer', color: Colors.success },
-          { icon: 'folder-open', label: 'View Docs',  sub: 'All files', color: Colors.gold },
-          { icon: 'edit',        label: 'Next Step',  sub: caseData.nextAction?.slice(0, 18) ?? 'Pending', color: Colors.danger },
+          { icon: 'upload-file', label: 'Upload Docs',  color: Colors.primary, action: onGoToDocs },
+          { icon: 'auto-awesome', label: 'Ask AI',      color: Colors.gold,    action: onGoToAI },
         ].map((q) => (
-          <TouchableOpacity key={q.label} style={ov.quickCard} activeOpacity={0.8}>
-            <View style={[ov.quickIcon, { backgroundColor: q.color + '1A' }]}>
-              <MaterialIcons name={q.icon as any} size={18} color={q.color} />
-            </View>
-            <Text style={ov.quickLabel}>{q.label}</Text>
-            <Text style={ov.quickSub} numberOfLines={1}>{q.sub}</Text>
+          <TouchableOpacity key={q.label} style={[td.quickBtn, { borderColor: q.color + '44' }]} onPress={q.action} activeOpacity={0.85}>
+            <MaterialIcons name={q.icon as any} size={18} color={q.color} />
+            <Text style={[td.quickBtnTxt, { color: q.color }]}>{q.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -197,43 +319,49 @@ function OverviewTab({ caseData }: { caseData: CaseData }) {
   );
 }
 
-// ─── Timeline Tab ─────────────────────────────────────────────────────────────
-function TimelineTab({ caseData }: { caseData: CaseData }) {
-  const events = ((caseData as any).timeline ?? []) as TimelineEvent[];
+// ─── Events / Timeline Tab ────────────────────────────────────────────────────
+function EventsTab({ c }: { c: AnyCase }) {
+  const events = ([...(c.events ?? [])] as any[]).sort((a, b) => {
+    const ta = new Date(a.date || 0).getTime();
+    const tb = new Date(b.date || 0).getTime();
+    return tb - ta;
+  });
   return (
-    <View style={tl.root}>
-      {events.map((ev, idx) => (
-        <View key={ev.id} style={tl.row}>
-          <View style={tl.lineCol}>
-            <View style={[tl.dot, { backgroundColor: DOT_COLOR[ev.type] }]}>
-              <View style={tl.dotInner} />
-            </View>
-            {idx < events.length - 1 && <View style={tl.line} />}
+    <View style={ev.root}>
+      <Text style={ev.intro}>What has happened in your case, in order of time.</Text>
+      {!events.length && (
+        <View style={ev.empty}>
+          <MaterialIcons name="history" size={36} color={Colors.textTertiary} />
+          <Text style={ev.emptyTxt}>Generating complete case history...</Text>
+        </View>
+      )}
+      {events.map((e, idx) => (
+        <View key={e.id} style={ev.row}>
+          <View style={ev.lineCol}>
+            <View style={[ev.dot, { backgroundColor: DOT[e.type] ?? Colors.primary }]} />
+            {idx < events.length - 1 && <View style={ev.line} />}
           </View>
-          <View style={tl.content}>
-            <Text style={tl.date}>{ev.date}  ·  {ev.time}</Text>
-            <View style={[tl.card, ev.type === 'urgent' && tl.urgentCard]}>
-              <View style={tl.cardHeader}>
-                <View style={[tl.typeDot, { backgroundColor: DOT_COLOR[ev.type] + '33' }]}>
-                  <View style={[tl.typeDotInner, { backgroundColor: DOT_COLOR[ev.type] }]} />
-                </View>
-                <Text style={tl.title}>{ev.title}</Text>
-              </View>
-              <Text style={tl.desc}>{ev.desc}</Text>
-              {ev.action && (
-                <View style={tl.actionRow}>
+          <View style={ev.content}>
+            <Text style={ev.date}>{e.date}</Text>
+            <View style={[ev.card, e.type === 'hearing' && ev.urgentCard]}>
+              <Text style={ev.title}>{e.title}</Text>
+              <Text style={ev.desc}>{e.description ?? e.desc}</Text>
+              {e.action && (
+                <View style={ev.actionBanner}>
                   <MaterialIcons name="schedule" size={12} color={Colors.warning} />
-                  <Text style={tl.actionTxt}>{ev.action}</Text>
+                  <Text style={ev.actionBannerTxt}>{e.action}</Text>
                 </View>
               )}
-              <View style={tl.peopleRow}>
-                {ev.people.map((p) => (
-                  <View key={p} style={tl.personChip}>
-                    <MaterialIcons name="person" size={10} color={Colors.textTertiary} />
-                    <Text style={tl.personTxt}>{p}</Text>
-                  </View>
-                ))}
-              </View>
+              {e.people?.length > 0 && (
+                <View style={ev.peopleRow}>
+                  {e.people.map((p: string) => (
+                    <View key={p} style={ev.personChip}>
+                      <MaterialIcons name="person" size={10} color={Colors.textTertiary} />
+                      <Text style={ev.personTxt}>{p}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -242,179 +370,379 @@ function TimelineTab({ caseData }: { caseData: CaseData }) {
   );
 }
 
-// ─── Documents Tab ─────────────────────────────────────────────────────────────
-function DocsTab({ caseData }: { caseData: CaseData }) {
-  const [activeDocCat, setActiveDocCat] = useState<'all' | 'court' | 'personal' | 'evidence'>('all');
-  const docs = ((caseData as any).documents ?? []) as Document[];
-  const cats = ['all', 'court', 'personal', 'evidence'] as const;
-  const filtered = activeDocCat === 'all' ? docs : docs.filter((d) => d.category === activeDocCat);
+// ─── Evidence & Documents Tab ─────────────────────────────────────────────────
+const DOC_TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
+  document: { label: 'Documents', icon: 'description', color: Colors.primary },
+  audio: { label: 'Audio', icon: 'graphic-eq', color: Colors.gold },
+  video: { label: 'Video', icon: 'videocam', color: Colors.warning },
+  chat: { label: 'Chats', icon: 'chat', color: Colors.blue },
+  official: { label: 'Official', icon: 'account-balance', color: Colors.success },
+  affidavit: { label: 'Affidavit', icon: 'verified-user', color: Colors.primary },
+};
+const FILE_TYPES = {
+  DOCUMENT: 'document',
+  AUDIO: 'audio',
+  VIDEO: 'video',
+  CHAT: 'chat',
+  OFFICIAL: 'official',
+} as const;
+const EVIDENCE_TAG_SUGGESTIONS = ['Identity Proof', 'Financial Evidence', 'Abuse Evidence', 'Communication Proof'];
+const UPLOAD_OPTIONS: Array<{ id: 'document' | 'video' | 'audio' | 'chat' | 'official'; label: string; icon: string }> = [
+  { id: 'document', label: 'Upload Document', icon: 'description' },
+  { id: 'video', label: 'Upload Video Evidence', icon: 'videocam' },
+  { id: 'audio', label: 'Upload Audio Recording', icon: 'graphic-eq' },
+  { id: 'chat', label: 'Upload Chat / Screenshot', icon: 'chat' },
+  { id: 'official', label: 'Upload Official Record', icon: 'account-balance' },
+];
+
+function DocsTab({
+  c,
+  onUpload,
+  onView,
+  onDelete,
+  onToggleCourtReady,
+}: {
+  c: AnyCase;
+  onUpload: (kind: 'document' | 'video' | 'audio' | 'chat' | 'official') => void;
+  onView: (doc: any) => void;
+  onDelete: (docId: string) => void;
+  onToggleCourtReady: (docId: string, value: boolean) => void;
+}) {
+  const [selectedFilter, setSelectedFilter] = useState<'all'|'document'|'audio'|'video'|'chat'|'official'>('all');
+  const [query, setQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'date'|'type'|'verified'>('date');
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const docs = (c.documents ?? []) as any[];
+  const evidenceData = useMemo(
+    () =>
+      docs.map((item) => ({
+        ...item,
+        type: String(item.type || item.fileType || '')
+          .toLowerCase()
+          .replace('documents', 'document')
+          .replace('videos', 'video')
+          .replace('audios', 'audio')
+          .replace('chats', 'chat'),
+      })),
+    [docs]
+  );
+  const [filteredData, setFilteredData] = useState<any[]>(evidenceData);
+
+  useEffect(() => {
+    const q = query.trim().toLowerCase();
+    let rows = selectedFilter === 'all'
+      ? evidenceData
+      : evidenceData.filter((item) => item.type === selectedFilter);
+    if (q) {
+      rows = rows.filter((item) =>
+        String(item.name || '').toLowerCase().includes(q) ||
+        (item.tags ?? []).some((t: string) => String(t).toLowerCase().includes(q))
+      );
+    }
+    rows = [...rows].sort((a, b) => {
+      if (sortBy === 'type') return String(a.type).localeCompare(String(b.type));
+      if (sortBy === 'verified') return String(a.verificationStatus).localeCompare(String(b.verificationStatus));
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+    setFilteredData(rows);
+  }, [selectedFilter, evidenceData, query, sortBy]);
 
   return (
     <View style={dc.root}>
-      {/* Upload buttons */}
-      <View style={dc.uploadRow}>
-        <TouchableOpacity style={[dc.uploadBtn, { borderColor: Colors.primary }]} activeOpacity={0.82}>
-          <MaterialIcons name="upload" size={16} color={Colors.primary} />
-          <Text style={[dc.uploadTxt, { color: Colors.primary }]}>Upload Document</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[dc.uploadBtn, dc.lawyerUploadBtn]} activeOpacity={0.82}>
-          <MaterialIcons name="gavel" size={16} color={Colors.gold} />
-          <Text style={[dc.uploadTxt, { color: Colors.gold }]}>Lawyer Upload</Text>
-        </TouchableOpacity>
-      </View>
+      <TextInput
+        style={dc.searchInput}
+        placeholder="Search files or tags"
+        placeholderTextColor={Colors.textTertiary}
+        value={query}
+        onChangeText={setQuery}
+      />
 
-      {/* Category filter */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={dc.catRow} style={{ marginBottom: 16 }}>
-        {cats.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[dc.catChip, activeDocCat === cat && dc.catChipActive]}
-            onPress={() => setActiveDocCat(cat)}
-            activeOpacity={0.8}
-          >
-            {cat !== 'all' && (
-              <MaterialIcons
-                name={DOC_CAT_ICON[cat] as any}
-                size={12}
-                color={activeDocCat === cat ? Colors.primary : Colors.textTertiary}
-              />
-            )}
-            <Text style={[dc.catTxt, activeDocCat === cat && dc.catTxtActive]}>
-              {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={dc.filterRow} style={{ marginBottom: 10 }}>
+        {(['all','document','audio','video','chat','official'] as const).map((f) => (
+          <TouchableOpacity key={f} style={[dc.filter, selectedFilter === f && dc.filterActive]} onPress={() => setSelectedFilter(f)} activeOpacity={0.8}>
+            <Text style={[dc.filterTxt, selectedFilter === f && dc.filterTxtActive]}>
+              {{ all:'All', document:'Documents', audio:'Audio', video:'Video', chat:'Chats', official:'Official' }[f]}
             </Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      {/* Document list */}
-      {filtered.map((doc) => (
-        <View key={doc.id} style={dc.docCard}>
-          <View style={[dc.docIcon, { backgroundColor: DOC_CAT_COLOR[doc.category] + '1A' }]}>
-            <MaterialIcons
-              name={DOC_CAT_ICON[doc.category] as any}
-              size={20}
-              color={DOC_CAT_COLOR[doc.category]}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={dc.docName}>{doc.name}</Text>
-            <Text style={dc.docMeta}>
-              {doc.size}  ·  {doc.date}  ·  By {doc.uploadedBy === 'lawyer' ? 'Lawyer' : 'You'}
-            </Text>
-          </View>
-          <View style={dc.docActions}>
-            <TouchableOpacity hitSlop={8} style={dc.docActionBtn}>
-              <MaterialIcons name="download" size={18} color={Colors.textSecondary} />
-            </TouchableOpacity>
-            {doc.uploadedBy === 'lawyer' && (
-              <TouchableOpacity hitSlop={8} style={dc.docActionBtn}>
-                <MaterialIcons name="delete-outline" size={18} color={Colors.danger} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      ))}
+      <View style={dc.sortRow}>
+        {(['date', 'type', 'verified'] as const).map((srt) => (
+          <TouchableOpacity key={srt} style={[dc.sortChip, sortBy === srt && dc.sortChipActive]} onPress={() => setSortBy(srt)} activeOpacity={0.85}>
+            <Text style={[dc.sortChipTxt, sortBy === srt && dc.sortChipTxtActive]}>{srt === 'date' ? 'Date' : srt === 'type' ? 'Type' : 'Verified'}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
-      {filtered.length === 0 && (
-        <View style={dc.empty}>
-          <MaterialIcons name="folder-open" size={36} color={Colors.textTertiary} />
-          <Text style={dc.emptyTxt}>No documents in this category</Text>
+      <FlatList
+        data={filteredData}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={dc.listContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={10}
+        extraData={selectedFilter}
+        ListHeaderComponent={
+          <View style={dc.uploadRow}>
+            <TouchableOpacity style={dc.uploadBtn} activeOpacity={0.85} onPress={() => setShowUploadModal(true)}>
+              <MaterialIcons name="upload" size={16} color="#fff" />
+              <Text style={dc.uploadBtnTxt}>Add Evidence</Text>
+            </TouchableOpacity>
+          </View>
+        }
+        renderItem={({ item: doc }) => {
+          const meta = DOC_TYPE_META[doc.type] ?? DOC_TYPE_META.document;
+          const statusVerified = doc.verificationStatus === 'verified';
+          return (
+            <View style={dc.docCard}>
+              <View style={[dc.docIcon, { backgroundColor: meta.color + '1A' }]}>
+                <MaterialIcons name={meta.icon as any} size={20} color={meta.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={dc.docName} numberOfLines={1}>{doc.name}</Text>
+                <Text style={dc.docMeta}>
+                  {Math.max(1, Math.round((doc.size ?? 0) / 1024))} KB · {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')}
+                </Text>
+                <View style={dc.tagRow}>
+                  {(doc.tags ?? []).slice(0, 3).map((t: string) => (
+                    <Text key={t} style={dc.tagChip}>{t}</Text>
+                  ))}
+                </View>
+                <View style={dc.statusRow}>
+                  <Text style={[dc.statusBadge, statusVerified ? dc.statusVerified : dc.statusPending]}>
+                    {statusVerified ? 'Verified' : 'Pending'}
+                  </Text>
+                  <Text style={[dc.statusBadge, doc.courtReady ? dc.statusVerified : dc.statusPending]}>
+                    {doc.courtReady ? 'Court Ready' : 'Needs Action'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={dc.toggleReadyBtn}
+                  onPress={() => onToggleCourtReady(doc.id, !doc.courtReady)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={dc.toggleReadyTxt}>{doc.courtReady ? 'Mark Needs Action' : 'Mark as Court Ready'}</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={dc.docActions}>
+                <TouchableOpacity hitSlop={8} onPress={() => onView(doc)}>
+                  <MaterialIcons name="open-in-new" size={16} color={Colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity hitSlop={8} onPress={() => onView(doc)}>
+                  <MaterialIcons name="download" size={17} color={Colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity hitSlop={8} onPress={() => onDelete(doc.id)}>
+                  <MaterialIcons name="delete-outline" size={17} color={Colors.danger} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        }}
+        ListEmptyComponent={filteredData.length === 0 ? (
+          <View style={dc.empty}>
+            <MaterialIcons name="folder-open" size={26} color={Colors.textTertiary} />
+            <Text style={dc.emptyTitle}>No Documents found</Text>
+            <TouchableOpacity style={dc.emptyBtn} onPress={() => setShowUploadModal(true)} activeOpacity={0.85}>
+              <Text style={dc.emptyBtnTxt}>Upload Document</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      />
+
+      {showUploadModal && (
+        <View style={dc.uploadModalLayer} pointerEvents="box-none">
+          <TouchableOpacity style={dc.uploadModalBackdrop} onPress={() => setShowUploadModal(false)} activeOpacity={1} />
+          <View style={dc.uploadModalSheet}>
+            <Text style={dc.uploadModalTitle}>Upload Evidence</Text>
+            {UPLOAD_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.id}
+                style={dc.uploadOption}
+                onPress={() => {
+                  setShowUploadModal(false);
+                  onUpload(opt.id);
+                }}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name={opt.icon as any} size={18} color={Colors.primary} />
+                <Text style={dc.uploadOptionTxt}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <Text style={dc.tagHint}>Suggested tags: {EVIDENCE_TAG_SUGGESTIONS.join(' • ')}</Text>
+            <TouchableOpacity style={dc.closeUploadBtn} onPress={() => setShowUploadModal(false)} activeOpacity={0.85}>
+              <Text style={dc.closeUploadTxt}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
-
-      {/* Permission notice */}
-      <View style={dc.permNotice}>
-        <MaterialIcons name="info-outline" size={13} color={Colors.textTertiary} />
-        <Text style={dc.permTxt}>If your lawyer deletes a document, you will be notified for approval</Text>
-      </View>
     </View>
   );
 }
 
-// ─── AI Chat Tab ──────────────────────────────────────────────────────────────
-function AIChatTab({ caseData }: { caseData: CaseData }) {
-  const c = caseData as any;
-  const prompts = [
-    `What documents do I need for the next hearing?`,
-    `What is the current strategy for my ${c.category} case?`,
-    `How likely am I to win based on current evidence?`,
-    `What should I do before ${c.nextHearing ?? 'the next hearing'}?`,
-    'Explain my case timeline in simple terms',
+// ─── Ask AI Tab ───────────────────────────────────────────────────────────────
+function AskAITab({ c }: { c: AnyCase }) {
+  const router = useRouter();
+  const questions = [
+    `What should I do before ${c.nextHearing ?? 'my next hearing'}?`,
+    `What documents do I still need?`,
+    `How strong is my case right now?`,
+    'Explain what happened in simple words',
+    'What will the judge look at?',
+    `How long will ${c.title.split('—')[0].trim()} take?`,
   ];
-
   return (
     <View style={ai.root}>
-      <View style={ai.header}>
-        <View style={ai.avatarWrap}>
-          <MaterialIcons name="auto-awesome" size={22} color={Colors.gold} />
-        </View>
-        <View>
-          <Text style={ai.title}>NyayaAI Case Advisor</Text>
-          <Text style={ai.sub}>Trained on your case context</Text>
+      <View style={ai.banner}>
+        <View style={ai.bannerIcon}><MaterialIcons name="auto-awesome" size={22} color={Colors.gold} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={ai.bannerTitle}>Ask Anything About Your Case</Text>
+          <Text style={ai.bannerSub}>AI trained on Indian law — answers in plain English</Text>
         </View>
       </View>
-
-      <View style={ai.strategyPreview}>
-        <Text style={ai.strategyLabel}>Current strategy insight</Text>
-        <Text style={ai.strategyText} numberOfLines={3}>{caseData.aiStrategy}</Text>
-      </View>
-
-      <Text style={ai.suggestLabel}>SUGGESTED QUESTIONS</Text>
-      {prompts.map((p, i) => (
-        <TouchableOpacity key={i} style={ai.promptBtn} activeOpacity={0.8}>
+      <Text style={ai.stratLabel}>AI says right now:</Text>
+      <Text style={ai.stratText}>{c.aiStrategy}</Text>
+      <Text style={ai.qLabel}>COMMON QUESTIONS</Text>
+      {questions.map((q, i) => (
+        <TouchableOpacity
+          key={i}
+          style={ai.qBtn}
+          activeOpacity={0.8}
+          onPress={() => router.push({ pathname: '/nyaya', params: { prefilledQuestion: q, autoSend: '1' } })}
+        >
           <MaterialIcons name="chat-bubble-outline" size={14} color={Colors.primary} />
-          <Text style={ai.promptTxt}>{p}</Text>
-          <MaterialIcons name="north-east" size={14} color={Colors.textTertiary} />
+          <Text style={ai.qTxt}>{q}</Text>
+          <MaterialIcons name="north-east" size={13} color={Colors.textTertiary} />
         </TouchableOpacity>
       ))}
-
-      <TouchableOpacity style={ai.openChatBtn} activeOpacity={0.85}>
-        <LinearGradient colors={[Colors.primary, '#7C3AED']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={ai.openChatGrad}>
-          <MaterialIcons name="auto-awesome" size={16} color="#fff" />
-          <Text style={ai.openChatTxt}>Open Full AI Chat</Text>
+      <TouchableOpacity
+        style={ai.openBtn}
+        activeOpacity={0.85}
+        onPress={() => router.push('/nyaya')}
+      >
+        <LinearGradient colors={[Colors.primary, '#7C3AED']} start={{x:0,y:0}} end={{x:1,y:0}} style={ai.openGrad}>
+          <MaterialIcons name="auto-awesome" size={15} color="#fff" />
+          <Text style={ai.openTxt}>Open Full AI Chat</Text>
         </LinearGradient>
       </TouchableOpacity>
     </View>
   );
 }
 
-// ─── Lawyer Tab ───────────────────────────────────────────────────────────────
-function LawyerTab({ caseData }: { caseData: CaseData }) {
-  const lawyer = caseData.lawyer;
-  const l = lawyer as any;
+// ─── Your Lawyer Tab ──────────────────────────────────────────────────────────
+function YourLawyerTab({
+  c,
+  caseId,
+  onOpenProfile,
+  walletBalance,
+  caseTitle,
+  caseCategory,
+  activeReviewTicket,
+  onCreateReviewTicket,
+  onAssignPlatformLawyer,
+  onAddOwnLawyer,
+}: {
+  c: AnyCase;
+  caseId: string;
+  onOpenProfile: (lawyerId: string) => void;
+  walletBalance: number;
+  caseTitle: string;
+  caseCategory: string;
+  activeReviewTicket: any;
+  onCreateReviewTicket: (payload: { reason: string; note: string; type: 'LAWYER_CHANGE_REQUEST' }) => Promise<void>;
+  onAssignPlatformLawyer: (payload: { lawyer: any; extraChargeInr: number }) => Promise<void>;
+  onAddOwnLawyer: (payload: { name: string; phone: string; email: string; firm?: string }) => Promise<void>;
+}) {
+  const router = useRouter();
+  const getOrCreateThread = useChatStore((s) => s.getOrCreateThread);
+  const l = c.lawyer as any;
+  const [callLoading, setCallLoading] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [changeOpen, setChangeOpen] = useState(false);
+
+  const phone = String(l?.phone ?? l?.contact?.phone ?? '').replace(/[^\d+]/g, '');
+  const lawyerId = String(l?.id ?? l?.lawyerId ?? `lawyer-${(l?.name ?? 'unknown').replace(/\s+/g, '-').toLowerCase()}`);
+
+  const handleCall = async () => {
+    if (callLoading) return;
+    if (!phone) {
+      Alert.alert('Phone Missing', 'Lawyer phone number is not available right now.');
+      return;
+    }
+    setCallLoading(true);
+    try {
+      await Linking.openURL(`tel:${phone}`);
+    } catch {
+      Alert.alert('Unable to Call', 'Could not open dialer. Please try again.');
+    } finally {
+      setCallLoading(false);
+    }
+  };
+
+  const handleMessage = async () => {
+    if (chatLoading) return;
+    setChatLoading(true);
+    try {
+      const thread = getOrCreateThread({
+        caseId,
+        lawyerId,
+        lawyerName: l?.name ?? 'Lawyer',
+      });
+      router.push({ pathname: '/chat/[id]', params: { id: thread.id, lawyerId, lawyerName: l?.name ?? 'Lawyer', caseId } });
+    } catch {
+      Alert.alert('Chat Failed', 'Unable to open chat. Please retry.');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   return (
     <View style={lw.root}>
-      {/* Lawyer profile card */}
-      <View style={lw.profileCard}>
-        <LinearGradient colors={['#4F46E5', '#7C3AED']} style={lw.avatar}>
-          <Text style={lw.avatarTxt}>{l.initials ?? 'LA'}</Text>
+      <TouchableOpacity style={lw.card} activeOpacity={0.92} onPress={() => onOpenProfile(lawyerId)}>
+        <LinearGradient colors={['#4F46E5','#7C3AED']} style={lw.avatar}>
+          <Text style={lw.avatarTxt}>{l?.initials ?? 'LA'}</Text>
         </LinearGradient>
         <View style={{ flex: 1 }}>
           <View style={lw.nameRow}>
-            <Text style={lw.name}>{l.name ?? 'Your Lawyer'}</Text>
-            {l.verified && <MaterialIcons name="verified" size={16} color={Colors.primary} />}
+            <Text style={lw.name}>{l?.name ?? 'Your Lawyer'}</Text>
+            {l?.verified && <MaterialIcons name="verified" size={14} color={Colors.primary} />}
           </View>
-          <Text style={lw.designation} numberOfLines={1}>{l.designation ?? 'Advocate'}</Text>
-          <View style={lw.metaRow}>
+          <Text style={lw.desig}>{l?.designation ?? 'Advocate'}</Text>
+          <View style={lw.ratingRow}>
             <MaterialIcons name="star" size={12} color={Colors.gold} />
-            <Text style={lw.rating}>{l.rating?.average ?? '—'}</Text>
-            <Text style={lw.reviews}>({l.rating?.totalReviews ?? 0} reviews)</Text>
-            <View style={lw.dot} />
-            <Text style={lw.exp}>{l.experienceYears ?? 0} yrs exp</Text>
+            <Text style={lw.rating}>{l?.rating?.average ?? '—'}</Text>
+            <Text style={lw.ratingCount}>({l?.rating?.totalReviews ?? 0} reviews)</Text>
+            <View style={lw.metaDot} />
+            <Text style={lw.exp}>{l?.experienceYears ?? 0} years experience</Text>
           </View>
           <View style={lw.onlineRow}>
-            <View style={[lw.onlineDot, { backgroundColor: l.isOnline ? Colors.success : '#6B7280' }]} />
-            <Text style={lw.onlineTxt}>{l.isOnline ? 'Online now' : 'Currently offline'}</Text>
+            <View style={[lw.onlineDot, { backgroundColor: l?.isOnline ? Colors.success : '#6B7280' }]} />
+            <Text style={lw.onlineTxt}>{l?.isOnline ? 'Available now' : 'Not available right now'}</Text>
           </View>
         </View>
+      </TouchableOpacity>
+
+      {/* CTA row */}
+      <View style={lw.ctaRow}>
+        <TouchableOpacity style={[lw.callBtn, callLoading && lw.disabledBtn]} activeOpacity={0.85} onPress={handleCall} disabled={callLoading}>
+          <MaterialIcons name="phone" size={16} color="#fff" />
+          <Text style={lw.callTxt}>{callLoading ? 'Opening...' : 'Call Lawyer'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[lw.chatBtn, chatLoading && lw.disabledBtn]} activeOpacity={0.85} onPress={handleMessage} disabled={chatLoading}>
+          <MaterialIcons name="chat" size={16} color={Colors.primary} />
+          <Text style={lw.chatTxt}>{chatLoading ? 'Opening...' : 'Send Message'}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Stats */}
       <View style={lw.statsRow}>
         {[
-          { v: `${l.cases?.winRatePercent ?? '—'}%`, l: 'Win Rate' },
-          { v: `${l.cases?.total ?? '—'}+`, l: 'Cases' },
-          { v: `${l.experienceYears ?? '—'} yrs`, l: 'Experience' },
+          { v: `${l?.cases?.winRatePercent ?? '—'}%`, l: 'Win Rate' },
+          { v: `${l?.cases?.total ?? '—'}+`, l: 'Cases Handled' },
+          { v: `${l?.experienceYears ?? '—'} yrs`, l: 'Experience' },
         ].map((st, i, arr) => (
           <React.Fragment key={st.l}>
             <View style={lw.statItem}>
@@ -426,54 +754,299 @@ function LawyerTab({ caseData }: { caseData: CaseData }) {
         ))}
       </View>
 
-      {/* CTA buttons */}
-      <View style={lw.ctaRow}>
-        <TouchableOpacity style={lw.callBtn} activeOpacity={0.85}>
-          <MaterialIcons name="phone" size={16} color="#fff" />
-          <Text style={lw.callTxt}>Call Lawyer</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={lw.chatBtn} activeOpacity={0.85}>
-          <MaterialIcons name="chat" size={16} color={Colors.primary} />
-          <Text style={lw.chatTxt}>Chat</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Change lawyer */}
-      <View style={lw.changeSection}>
-        <Text style={lw.changeSectionTitle}>Not satisfied?</Text>
-        <Text style={lw.changeSectionSub}>You can request a change of lawyer. A ticket will be raised for review.</Text>
-        <TouchableOpacity style={lw.changeBtn} activeOpacity={0.82}>
-          <MaterialIcons name="swap-horiz" size={16} color={Colors.warning} />
-          <Text style={lw.changeBtnTxt}>Request Lawyer Change</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Specializations */}
-      {l.specializations?.length > 0 && (
-        <View style={lw.specsBlock}>
-          <Text style={lw.specsTitle}>SPECIALIZES IN</Text>
-          <View style={lw.specsRow}>
-            {l.specializations.map((sp: string) => (
-              <View key={sp} style={lw.specChip}>
-                <Text style={lw.specTxt}>{sp}</Text>
-              </View>
-            ))}
-          </View>
+      {/* Court + specializations */}
+      {l?.courts?.length > 0 && (
+        <View style={lw.courtsBlock}>
+          <Text style={lw.blockLabel}>PRACTICES IN</Text>
+          {l.courts.slice(0, 3).map((ct: any) => (
+            <View key={ct.name} style={lw.courtRow}>
+              <MaterialIcons name="account-balance" size={14} color={Colors.primary} />
+              <Text style={lw.courtName}>{ct.name}</Text>
+              <Text style={lw.courtSince}>since {ct.since}</Text>
+            </View>
+          ))}
         </View>
       )}
+
+      {/* Change lawyer */}
+      <View style={lw.changeBox}>
+        {activeReviewTicket && (
+          <View style={lw.reviewBadge}>
+            <Text style={lw.reviewBadgeTxt}>
+              Review in progress (ETA: 48h) • {activeReviewTicket.status}
+            </Text>
+          </View>
+        )}
+        <Text style={lw.changeTitle}>Not comfortable with your lawyer?</Text>
+        <Text style={lw.changeSub}>You can request a change. Our team will assign a better-suited lawyer within 48 hours.</Text>
+        <TouchableOpacity style={lw.changeBtn} activeOpacity={0.82} onPress={() => setChangeOpen(true)}>
+          <MaterialIcons name="swap-horiz" size={15} color={Colors.warning} />
+          <Text style={lw.changeTxt}>Request Lawyer Change</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={lw.escalateBtn} activeOpacity={0.82} onPress={() => setChangeOpen(true)}>
+          <MaterialIcons name="support-agent" size={14} color={Colors.primary} />
+          <Text style={lw.escalateTxt}>Escalate / Change / Add Lawyer</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ChangeLawyerFlowSheet
+        visible={changeOpen}
+        onClose={() => setChangeOpen(false)}
+        caseId={caseId}
+        caseTitle={caseTitle}
+        caseCategory={caseCategory}
+        walletBalance={walletBalance}
+        currentLawyer={l}
+        activeReviewTicket={activeReviewTicket}
+        onCreateReviewTicket={onCreateReviewTicket}
+        onAssignPlatformLawyer={onAssignPlatformLawyer}
+        onAddOwnLawyer={onAddOwnLawyer}
+      />
     </View>
   );
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
+const TABS = [
+  { key: 'todo',    label: 'What To Do' },
+  { key: 'events',  label: 'Events' },
+  { key: 'docs',    label: 'Evidence & Documents' },
+  { key: 'ai',      label: 'Ask AI' },
+  { key: 'lawyer',  label: 'Your Lawyer' },
+];
+
 export default function CaseDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState(0);
 
-  const caseData = MOCK_CASES.find((c) => c.id === id) ?? MOCK_CASES[0];
-  const c = caseData as any;
-  const urg = URGENCY_CFG[caseData.urgency] ?? URGENCY_CFG.medium;
+  const {
+    cases,
+    setSelectedSubCase,
+    addReminder,
+    addDocument,
+    deleteDocument,
+    updateDocument,
+    updateCaseStage,
+    createLawyerReviewTicket,
+    closeLawyerReviewTicket,
+    refreshLawyerReviewSLAs,
+    addEvent,
+    assignLawyer,
+    deductWalletForCase,
+    user,
+  } = useCaseStore();
+  const allCases = cases as AnyCase[];
+
+  const handleBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/cases');
+  };
+
+  const [activeCaseId, setActiveCaseId] = useState(id ?? '');
+  const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
+  const activeCase = useMemo(
+    () => (allCases.find((c) => c.id === activeCaseId) ?? MOCK_CASES.find((c) => c.id === id) ?? MOCK_CASES[0]) as AnyCase,
+    [activeCaseId, allCases, id],
+  );
+
+  const handleSelectCase = useCallback((caseId: string) => {
+    setActiveCaseId(caseId);
+    setSelectedSubCase(caseId);
+    setActiveTab(0);
+  }, [setSelectedSubCase]);
+
+  const handleRemind = useCallback(() => {
+    if (!activeCase?.id || !activeCase?.nextHearing) return;
+    addReminder({
+      caseId: activeCase.id,
+      date: activeCase.nextHearing,
+      triggered: false,
+    });
+    Alert.alert('Reminder Set', 'You will be reminded before the next hearing.');
+  }, [activeCase, addReminder]);
+
+  const handleUploadDocument = useCallback(async (kind: 'document' | 'video' | 'audio' | 'chat' | 'official') => {
+    if (!activeCase?.id) return;
+    const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
+    if (result.canceled) return;
+    const file = result.assets?.[0];
+    if (!file) return;
+    const ext = (file.name?.split('.').pop() || '').toLowerCase();
+    let inferredType: 'document' | 'audio' | 'video' | 'chat' | 'official' = kind;
+    if (kind === FILE_TYPES.DOCUMENT) {
+      if (['mp3', 'wav'].includes(ext)) inferredType = FILE_TYPES.AUDIO;
+      else if (['mp4', 'mov'].includes(ext)) inferredType = FILE_TYPES.VIDEO;
+      else if (['jpg', 'jpeg', 'png', 'webp', 'txt'].includes(ext)) inferredType = FILE_TYPES.CHAT;
+      else if (['pdf', 'doc', 'docx'].includes(ext)) inferredType = FILE_TYPES.DOCUMENT;
+      else inferredType = FILE_TYPES.OFFICIAL;
+    }
+    const needs65B = inferredType === 'audio' || inferredType === 'video' || inferredType === 'chat';
+    addDocument(activeCase.id, {
+      name: file.name ?? 'Document',
+      type: inferredType,
+      subtype: kind,
+      format: ext || 'unknown',
+      caseId: activeCase.id,
+      caseTag: String(activeCase.chips?.[0] ?? activeCase.title ?? 'General'),
+      tags: inferredType === 'chat' ? ['Communication Proof'] : inferredType === 'official' ? ['Identity Proof'] : inferredType === 'video' || inferredType === 'audio' ? ['Abuse Evidence'] : ['Financial Evidence'],
+      uploadedBy: 'user',
+      verificationStatus: inferredType === 'official' ? 'verified' : 'pending',
+      courtReady: inferredType === 'official',
+      size: file.size ?? 0,
+      uri: file.uri,
+    });
+    if (needs65B) {
+      Alert.alert('Section 65B Note', 'This may require Section 65B Certificate for court admissibility');
+    }
+  }, [activeCase, addDocument]);
+
+  const handleViewDocument = useCallback(async (doc: CaseDocument) => {
+    if (!doc?.uri) return;
+    try {
+      await Linking.openURL(doc.uri);
+    } catch {
+      Alert.alert('Unable to open', 'This document cannot be opened right now.');
+    }
+  }, []);
+
+  const handleDeleteDocument = useCallback((docId: string) => {
+    if (!activeCase?.id) return;
+    deleteDocument(activeCase.id, docId);
+  }, [activeCase, deleteDocument]);
+
+  const handleToggleCourtReady = useCallback((docId: string, value: boolean) => {
+    if (!activeCase?.id) return;
+    updateDocument(activeCase.id, docId, { courtReady: value, verificationStatus: value ? 'verified' : 'pending' });
+  }, [activeCase, updateDocument]);
+
+  const handleStagePress = useCallback((stageName: string) => {
+    if (!activeCase?.id) return;
+    updateCaseStage(activeCase.id, stageName);
+  }, [activeCase, updateCaseStage]);
+
+  useEffect(() => {
+    refreshLawyerReviewSLAs();
+    const timer = setInterval(() => refreshLawyerReviewSLAs(), 60_000);
+    return () => clearInterval(timer);
+  }, [refreshLawyerReviewSLAs]);
+
+  const handleOpenLawyerProfile = useCallback((lawyerId: string) => {
+    router.push({ pathname: '/lawyer/[id]', params: { id: lawyerId } });
+  }, [router]);
+
+  const handleCreateReviewTicket = useCallback(async ({ reason, note, type }: { reason: string; note: string; type: 'LAWYER_CHANGE_REQUEST' }) => {
+    if (!activeCase?.id) throw new Error('Missing case');
+    const ticketId = createLawyerReviewTicket({
+      caseId: activeCase.id,
+      lawyerId: activeCase?.lawyer?.id ?? activeCase?.lawyer?.lawyerId,
+      reason,
+      note,
+    });
+    if (!ticketId) throw new Error('Review already in progress');
+    addEvent(activeCase.id, {
+      title: 'Lawyer Change Requested',
+      description: `${type}: ${reason}${note ? ` - ${note}` : ''}`,
+      date: new Date().toISOString(),
+      type: 'support',
+    });
+    sendNotification(
+      'lawyer',
+      `Your lawyer review request is under process for ${activeCase.title}`,
+      {
+        title: 'Request Submitted',
+        priority: 'medium',
+        targetRoute: '/(tabs)/cases',
+        targetParams: { caseId: activeCase.id, ticketId: ticketId ?? '' },
+      },
+    );
+  }, [activeCase, createLawyerReviewTicket, addEvent]);
+
+  const handleAssignPlatformLawyer = useCallback(async ({ lawyer, extraChargeInr }: { lawyer: any; extraChargeInr: number }) => {
+    if (!activeCase?.id) throw new Error('Missing case');
+    if (extraChargeInr > 0) {
+      const ok = deductWalletForCase(activeCase.id, extraChargeInr);
+      if (!ok) {
+        throw new Error('Insufficient wallet');
+      }
+    }
+    const initials = String(lawyer.name || 'LA')
+      .replace(/^Adv\.\s*/i, '')
+      .split(' ')
+      .slice(0, 2)
+      .map((p: string) => p[0]?.toUpperCase() ?? '')
+      .join('');
+    assignLawyer(activeCase.id, {
+      id: lawyer.id,
+      name: lawyer.name,
+      initials,
+      isOnline: lawyer.isOnline,
+      experienceYears: 5 + (lawyer.id.length % 10),
+      designation: `${lawyer.specialization || 'Advocate'} Specialist`,
+      contact: { phone: lawyer.phone ?? '9999999999' },
+      phone: lawyer.phone ?? '9999999999',
+      rate: lawyer.price,
+      price: lawyer.price,
+      rating: { average: lawyer.rating, totalReviews: 120 },
+      courts: [{ name: lawyer.court, since: '2018' }],
+      cases: { winRatePercent: Math.round((lawyer.rating / 5) * 100), total: 120 + lawyer.id.length * 3 },
+    });
+    sendNotification(
+      'lawyer',
+      `${lawyer.name} has been assigned to your case`,
+      { title: 'Lawyer Assigned', priority: 'medium', targetRoute: '/case/[id]', targetParams: { id: activeCase.id } },
+    );
+    closeLawyerReviewTicket(activeCase.id);
+    addEvent(activeCase.id, {
+      title: 'Lawyer Review Completed',
+      description: 'Lawyer review completed and ticket closed.',
+      date: new Date().toISOString(),
+      type: 'support',
+    });
+    sendNotification(
+      'lawyer',
+      `Your request has been resolved for ${activeCase.title}`,
+      { title: 'Review Resolved', priority: 'medium', targetRoute: '/case/[id]', targetParams: { id: activeCase.id } },
+    );
+  }, [activeCase, deductWalletForCase, assignLawyer, closeLawyerReviewTicket, addEvent]);
+
+  const handleAddOwnLawyer = useCallback(async ({ name, phone, email, firm }: { name: string; phone: string; email: string; firm?: string }) => {
+    if (!activeCase?.id) throw new Error('Missing case');
+    const ticketId = createLawyerReviewTicket({
+      caseId: activeCase.id,
+      lawyerId: activeCase?.lawyer?.id ?? activeCase?.lawyer?.lawyerId,
+      reason: 'Own lawyer added',
+      note: `${name} (${phone})`,
+    });
+    addEvent(activeCase.id, {
+      title: 'Own Lawyer Added for Verification',
+      description: `${name} (${phone})${firm ? ` • ${firm}` : ''}${email ? ` • ${email}` : ''}`,
+      date: new Date().toISOString(),
+      type: 'support',
+    });
+    sendNotification(
+      'lawyer',
+      `Own lawyer details submitted for verification in ${activeCase.title}`,
+      {
+        title: 'Verification Pending',
+        priority: 'medium',
+        targetRoute: '/(tabs)/cases',
+        targetParams: { caseId: activeCase.id, ticketId: ticketId ?? '' },
+      },
+    );
+  }, [activeCase, createLawyerReviewTicket, addEvent]);
+
+  const activeReviewTicket = useMemo(
+    () =>
+      (activeCase?.tickets ?? []).find(
+        (t: any) => t.type === 'lawyer_review' && ['OPEN', 'IN_REVIEW', 'ESCALATED'].includes(t.status),
+      ) ?? null,
+    [activeCase],
+  );
+
+  const categoryLabel  = getCategoryLabel(activeCase.category ?? '');
+  const categoryCount  = allCases.filter((c) => c.category === activeCase.category).length;
+  const u = URG[activeCase.urgency] ?? URG.medium;
 
   return (
     <View style={s.root}>
@@ -481,286 +1054,403 @@ export default function CaseDetailScreen() {
 
       {/* ── Header ── */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={10}>
-          <MaterialIcons name="arrow-back" size={22} color={Colors.textPrimary} />
+        <TouchableOpacity onPress={handleBack} style={s.backPill} hitSlop={10} activeOpacity={0.8}>
+          <MaterialIcons name="arrow-back-ios" size={13} color={Colors.textSecondary} />
+          <Text style={s.backTxt}>Cases</Text>
         </TouchableOpacity>
-        <Text style={s.headerTitle} numberOfLines={1}>{caseData.title}</Text>
-        <TouchableOpacity style={s.moreBtn} hitSlop={10}>
+        <View style={s.headerCenter}>
+          <Text style={s.headerTitle}>{categoryLabel}</Text>
+          <Text style={s.headerSub}>{categoryCount} {categoryCount === 1 ? 'case' : 'cases'} active</Text>
+        </View>
+        <TouchableOpacity style={s.moreBtn} hitSlop={10} onPress={() => setActionsSheetOpen(true)} activeOpacity={0.8}>
           <MaterialIcons name="more-vert" size={22} color={Colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
-        {/* ── Hero overview block ── */}
-        <View style={s.hero}>
-          {/* Chips + urgency */}
-          <View style={s.topRow}>
-            <View style={s.chipRow}>
-              {caseData.chips.map((ch) => (
-                <View key={ch} style={s.chip}><Text style={s.chipTxt}>{ch}</Text></View>
-              ))}
-            </View>
-            <View style={[s.urgBadge, { backgroundColor: urg.bg }]}>
-              <View style={[s.urgDot, { backgroundColor: urg.color }]} />
-              <Text style={[s.urgTxt, { color: urg.color }]}>{caseData.urgency.toUpperCase()}</Text>
-            </View>
-          </View>
+      {/* ── Case Selector ── */}
+      <CaseSelector
+        allCases={allCases}
+        activeId={activeCaseId}
+        onSelect={handleSelectCase}
+        onAdd={() => router.push({ pathname: '/(tabs)/cases', params: { openNew: '1', source: 'case_selector_add', category: activeCase.category } })}
+      />
 
-          {/* Stage progress */}
-          <View style={s.stageTrack}>
-            {caseData.stages.map((st, idx) => (
-              <View key={st} style={s.stageSegment}>
-                <View style={[s.stageDot, idx <= caseData.activeStageIndex && s.stageDotActive]}>
-                  {idx <= caseData.activeStageIndex && <View style={s.stageDotInner} />}
-                </View>
-                {idx < caseData.stages.length - 1 && (
-                  <View style={[s.stageLine, idx < caseData.activeStageIndex && s.stageLineActive]} />
-                )}
+      {/* ── Stage progress strip ── */}
+      <View style={s.stageStrip}>
+        <View style={s.stageTrack}>
+          {activeCase.stages.map((st, idx) => (
+            <TouchableOpacity key={st} style={s.stageSegment} activeOpacity={0.85} onPress={() => handleStagePress(st)}>
+              <View style={[s.stageDot, idx <= activeCase.activeStageIndex && s.stageDotActive]}>
+                {idx < activeCase.activeStageIndex && <MaterialIcons name="check" size={7} color="#fff" />}
+                {idx === activeCase.activeStageIndex && <View style={s.stageDotPulse} />}
               </View>
-            ))}
+              {idx < activeCase.stages.length - 1 && (
+                <View style={[s.stageLine, idx < activeCase.activeStageIndex && s.stageLineActive]} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={s.stageLabelRow}>
+          {activeCase.stages.map((st, idx) => (
+            <Text key={st} style={[
+              s.stageLbl,
+              idx < activeCase.activeStageIndex && s.stageLblDone,
+              idx === activeCase.activeStageIndex && s.stageLblActive,
+            ]} numberOfLines={1}>{st}</Text>
+          ))}
+        </View>
+      </View>
+
+      {activeTab === 2 ? (
+        // Docs tab contains a FlatList (Add Evidence list), so keep it out of any parent vertical ScrollView.
+        <View style={s.docsContainer}>
+          <View style={s.tabBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabContent}>
+              {TABS.map((tab, idx) => (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[s.tab, activeTab === idx && s.tabActive]}
+                  onPress={() => setActiveTab(idx)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.tabTxt, activeTab === idx && s.tabTxtActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
-          <View style={s.stageLabelRow}>
-            {caseData.stages.map((st, idx) => (
-              <Text key={st} style={[s.stageLbl, idx === caseData.activeStageIndex && s.stageLblActive]} numberOfLines={1}>{st}</Text>
-            ))}
+          <View style={s.docsBody}>
+            <DocsTab c={activeCase} onUpload={handleUploadDocument} onView={handleViewDocument} onDelete={handleDeleteDocument} onToggleCourtReady={handleToggleCourtReady} />
           </View>
         </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[0]}>
+          {/* ── Tab Bar (sticky) ── */}
+          <View style={s.tabBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabContent}>
+              {TABS.map((tab, idx) => (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[s.tab, activeTab === idx && s.tabActive]}
+                  onPress={() => setActiveTab(idx)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.tabTxt, activeTab === idx && s.tabTxtActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
 
-        {/* ── Tab bar (sticky) ── */}
-        <View style={s.tabBar}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabContent}>
-            {TABS.map((tab, idx) => (
-              <TouchableOpacity
-                key={tab}
-                style={[s.tab, activeTab === idx && s.tabActive]}
-                onPress={() => setActiveTab(idx)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.tabTxt, activeTab === idx && s.tabTxtActive]}>{tab}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+          {/* ── Tab Content ── */}
+          <View style={s.tabBody}>
+            {activeTab === 0 && <WhatToDoTab c={activeCase} onGoToDocs={() => setActiveTab(2)} onGoToAI={() => setActiveTab(3)} onRemind={handleRemind} />}
+            {activeTab === 1 && <EventsTab c={activeCase} />}
+            {activeTab === 3 && <AskAITab c={activeCase} />}
+            {activeTab === 4 && (
+              <YourLawyerTab
+                c={activeCase}
+                caseId={activeCase.id}
+                caseTitle={activeCase.title}
+                caseCategory={activeCase.category}
+                walletBalance={user.walletBalance}
+                activeReviewTicket={activeReviewTicket}
+                onOpenProfile={handleOpenLawyerProfile}
+                onCreateReviewTicket={handleCreateReviewTicket}
+                onAssignPlatformLawyer={handleAssignPlatformLawyer}
+                onAddOwnLawyer={handleAddOwnLawyer}
+              />
+            )}
+          </View>
 
-        {/* ── Tab content ── */}
-        <View style={s.tabBody}>
-          {activeTab === 0 && <OverviewTab caseData={caseData as any} />}
-          {activeTab === 1 && <TimelineTab caseData={caseData as any} />}
-          {activeTab === 2 && <DocsTab caseData={caseData as any} />}
-          {activeTab === 3 && <AIChatTab caseData={caseData as any} />}
-          {activeTab === 4 && <LawyerTab caseData={caseData as any} />}
-        </View>
+          <View style={{ height: 110 }} />
+        </ScrollView>
+      )}
 
-        {/* Bottom clearance for OS chrome */}
-        <View style={{ height: 110 }} />
-      </ScrollView>
+      {/* ── Case Actions bottom sheet (3-dot menu) ── */}
+      <CaseActionsSheet
+        visible={actionsSheetOpen}
+        onClose={() => setActionsSheetOpen(false)}
+        caseId={activeCaseId}
+        caseTitle={activeCase.title}
+        onEditCaseDetails={(caseId) => {
+          router.push({
+            pathname: '/(tabs)/cases',
+            params: { openNew: '1', source: 'edit_case', editCaseId: caseId, category: activeCase.category },
+          });
+        }}
+      />
     </View>
   );
 }
 
 // ─── Main Styles ──────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:    { flex: 1, backgroundColor: Colors.bgPrimary },
-  header:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 10, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle },
-  backBtn: { padding: 4, width: 32 },
-  headerTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  moreBtn: { padding: 4, width: 32, alignItems: 'flex-end' },
+  root: { flex: 1, backgroundColor: Colors.bgPrimary },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle },
+  backPill: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: Colors.bgElevated, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border, flexShrink: 0 },
+  backTxt: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
+  headerSub: { fontSize: 11, color: Colors.textTertiary, marginTop: 1 },
+  moreBtn: { padding: 4, width: 32, alignItems: 'flex-end', flexShrink: 0 },
 
-  hero: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, gap: 10, backgroundColor: Colors.bgPrimary, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  chipRow: { flex: 1, flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginRight: 8 },
-  chip: { backgroundColor: Colors.bgElevated, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border },
-  chipTxt: { color: Colors.textSecondary, fontSize: 10, fontWeight: '600' },
-  urgBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4 },
-  urgDot: { width: 5, height: 5, borderRadius: 3 },
-  urgTxt: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
-
-  stageTrack: { flexDirection: 'row', alignItems: 'center' },
+  stageStrip: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle, backgroundColor: Colors.bgPrimary },
+  stageTrack: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   stageSegment: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  stageDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
+  stageDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
   stageDotActive: { backgroundColor: Colors.gold },
-  stageDotInner: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.bgPrimary },
+  stageDotPulse: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.bgPrimary },
   stageLine: { flex: 1, height: 2, backgroundColor: Colors.border },
   stageLineActive: { backgroundColor: Colors.gold },
   stageLabelRow: { flexDirection: 'row' },
-  stageLbl: { flex: 1, fontSize: 9, color: Colors.textTertiary },
-  stageLblActive: { color: Colors.gold, fontWeight: '700' },
+  stageLbl: { flex: 1, fontSize: 9, color: Colors.textTertiary, textAlign: 'center' },
+  stageLblDone: { color: Colors.textTertiary },
+  stageLblActive: { color: Colors.gold, fontWeight: '800' },
 
   tabBar: { backgroundColor: Colors.bgPrimary, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  tabContent: { paddingHorizontal: 16, gap: 4 },
+  tabContent: { paddingHorizontal: 12, gap: 2 },
   tab: { paddingHorizontal: 14, paddingVertical: 12 },
   tabActive: { borderBottomWidth: 2, borderBottomColor: Colors.primary },
   tabTxt: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
   tabTxtActive: { color: Colors.primary, fontWeight: '700' },
   tabBody: { padding: 16 },
+  docsContainer: { flex: 1 },
+  docsBody: { flex: 1, padding: 16 },
 });
 
-// ─── Overview Tab Styles ──────────────────────────────────────────────────────
-const ov = StyleSheet.create({
-  root: { gap: 16 },
+// ─── Case Selector Styles ─────────────────────────────────────────────────────
+const cs = StyleSheet.create({
+  wrap: { backgroundColor: Colors.bgSecondary, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle, paddingTop: 10 },
+  row: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingBottom: 10 },
+  tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 110 },
+  tabActive: { backgroundColor: Colors.primarySubtle, borderColor: Colors.primary },
+  tabDot: { width: 6, height: 6, borderRadius: 3, flexShrink: 0 },
+  tabTxt: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary },
+  tabTxtActive: { color: Colors.primary },
+  addTab: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: Colors.primary, borderStyle: 'dashed', backgroundColor: Colors.primarySubtle },
+  addTxt: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  otherPill: { alignSelf: 'center', paddingHorizontal: 10, paddingVertical: 3, marginBottom: 8 },
+  otherTxt: { fontSize: 10, color: Colors.textTertiary },
+});
 
-  hearingCard: { borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: 'rgba(59,91,219,0.25)' },
-  hearingLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+// ─── What To Do Tab Styles ────────────────────────────────────────────────────
+const td = StyleSheet.create({
+  root: { gap: 14 },
+  nextCard: { borderRadius: 18, padding: 16, gap: 14, borderWidth: 1 },
+  nextTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  nextIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  nextLabel: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  nextAction: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, lineHeight: 22 },
+  nextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 12, height: 44 },
+  nextBtnTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
+
+  hearingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.bgSecondary, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(59,91,219,0.25)' },
+  hearingLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   hearingLabel: { fontSize: 11, color: Colors.textSecondary },
-  hearingDate: { fontSize: 16, fontWeight: '800', color: Colors.primary, marginTop: 2 },
-  reminderBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.primarySubtle, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
-  reminderTxt: { fontSize: 11, fontWeight: '600', color: Colors.primary },
+  hearingDate: { fontSize: 17, fontWeight: '800', color: Colors.primary, marginTop: 2 },
+  hearingCountdown: { fontSize: 12, fontWeight: '700', color: Colors.success, marginTop: 2 },
+  remindBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.primarySubtle, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
+  remindTxt: { fontSize: 12, fontWeight: '600', color: Colors.primary },
 
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  statCard: { flex: 1, minWidth: '44%', backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 12, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: Colors.border },
-  statIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  statVal: { fontSize: 14, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center' },
-  statLbl: { fontSize: 10, color: Colors.textSecondary, letterSpacing: 0.3, textAlign: 'center' },
-
-  courtCard: { backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 0 },
-  courtRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  courtLabel: { fontSize: 10, color: Colors.textTertiary, marginBottom: 3 },
-  courtValue: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
+  statusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  statusCard: { flex: 1, minWidth: '44%', backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 12, alignItems: 'center', gap: 5, borderWidth: 1, borderColor: Colors.border },
+  statusIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  statusTop: { fontSize: 13, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center' },
+  statusBot: { fontSize: 10, color: Colors.textSecondary, textAlign: 'center', letterSpacing: 0.2 },
 
   section: { gap: 10 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, flex: 1 },
-  badge: { backgroundColor: Colors.warningSubtle, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },
-  badgeTxt: { fontSize: 11, fontWeight: '700', color: Colors.warning },
-
-  actionItem: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.bgSecondary, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
+  sectionSub: { fontSize: 12, color: Colors.textSecondary, marginTop: -4 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.bgSecondary, borderRadius: 12, padding: 13, borderWidth: 1, borderColor: Colors.border },
   actionDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   actionTask: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
   actionDue: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
-  priorityTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
-  priorityTxt: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  actionTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
+  actionTagTxt: { fontSize: 10, fontWeight: '700' },
 
   aiCard: { backgroundColor: Colors.bgSecondary, borderRadius: 16, padding: 16, borderLeftWidth: 3, borderLeftColor: Colors.gold, borderWidth: 1, borderColor: Colors.goldSubtle, gap: 10 },
   aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   aiTitle: { fontSize: 15, fontWeight: '800', color: Colors.gold },
-  aiText: { fontSize: 13, color: Colors.textPrimary, lineHeight: 21 },
+  aiText: { fontSize: 13, color: Colors.textPrimary, lineHeight: 20 },
   stepsBlock: { gap: 8 },
   stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  stepNum: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.goldSubtle, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 },
+  stepNum: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.goldSubtle, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   stepNumTxt: { fontSize: 10, fontWeight: '700', color: Colors.gold },
-  stepTxt: { flex: 1, fontSize: 13, color: Colors.textSecondary, lineHeight: 20 },
-  aiCta: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: Colors.primarySubtle, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  stepTxt: { flex: 1, fontSize: 12, color: Colors.textSecondary, lineHeight: 19 },
+  aiCta: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: Colors.primarySubtle, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 7 },
   aiCtaTxt: { fontSize: 12, fontWeight: '700', color: Colors.primary },
 
   similarRow: { flexDirection: 'row', gap: 10 },
-  similarCard: { flex: 1, backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 12, borderWidth: 1.5, gap: 6 },
-  similarResultPill: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
-  similarResult: { fontSize: 11, fontWeight: '800' },
-  similarProb: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
-  similarNote: { fontSize: 11, color: Colors.textSecondary, lineHeight: 17 },
+  simCard: { flex: 1, backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 12, borderWidth: 1.5, gap: 5 },
+  simResult: { fontSize: 11, fontWeight: '800' },
+  simProb: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
+  simNote: { fontSize: 11, color: Colors.textSecondary, lineHeight: 16 },
 
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  quickCard: { width: '47%', backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 6 },
-  quickIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  quickLabel: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
-  quickSub: { fontSize: 11, color: Colors.textSecondary },
+  quickGrid: { flexDirection: 'row', gap: 10 },
+  quickBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: Colors.bgSecondary, borderRadius: 14, height: 48, borderWidth: 1 },
+  quickBtnTxt: { fontSize: 13, fontWeight: '700' },
 });
 
-// ─── Timeline Styles ──────────────────────────────────────────────────────────
-const tl = StyleSheet.create({
+// ─── Events Styles ────────────────────────────────────────────────────────────
+const ev = StyleSheet.create({
   root: { gap: 0 },
-  row: { flexDirection: 'row', gap: 14 },
-  lineCol: { alignItems: 'center', width: 20 },
-  dot: { width: 14, height: 14, borderRadius: 7, marginTop: 16, alignItems: 'center', justifyContent: 'center' },
-  dotInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff', opacity: 0.7 },
-  line: { flex: 1, width: 2, backgroundColor: Colors.borderSubtle, marginVertical: 4 },
-  content: { flex: 1, paddingBottom: 20 },
-  date: { fontSize: 11, color: Colors.textTertiary, marginTop: 14, marginBottom: 7 },
-  card: { backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 8 },
-  urgentCard: { borderColor: Colors.danger, borderWidth: 1.5, backgroundColor: 'rgba(248,81,73,0.04)' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  typeDot: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  typeDotInner: { width: 8, height: 8, borderRadius: 4 },
-  title: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, flex: 1 },
-  desc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 20 },
-  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.warningSubtle, borderRadius: 8, padding: 8 },
-  actionTxt: { color: Colors.warning, fontSize: 12, fontWeight: '600' },
-  peopleRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  personChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.bgElevated, borderRadius: 100, paddingHorizontal: 9, paddingVertical: 4 },
-  personTxt: { fontSize: 11, color: Colors.textTertiary },
-});
-
-// ─── Documents Styles ─────────────────────────────────────────────────────────
-const dc = StyleSheet.create({
-  root: { gap: 0 },
-  uploadRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  uploadBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 12, paddingVertical: 11, borderWidth: 1.5, borderStyle: 'dashed' },
-  lawyerUploadBtn: { borderColor: Colors.gold, backgroundColor: Colors.goldSubtle },
-  uploadTxt: { fontSize: 12, fontWeight: '700' },
-  catRow: { gap: 8, flexDirection: 'row', paddingBottom: 2 },
-  catChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.border },
-  catChipActive: { backgroundColor: Colors.primarySubtle, borderColor: Colors.primary },
-  catTxt: { fontSize: 12, fontWeight: '500', color: Colors.textSecondary },
-  catTxtActive: { color: Colors.primary, fontWeight: '700' },
-  docCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: Colors.border },
-  docIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  docName: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
-  docMeta: { fontSize: 11, color: Colors.textTertiary, marginTop: 3 },
-  docActions: { flexDirection: 'row', gap: 6, flexShrink: 0 },
-  docActionBtn: { padding: 4 },
+  intro: { fontSize: 13, color: Colors.textSecondary, marginBottom: 16, lineHeight: 20 },
   empty: { alignItems: 'center', paddingVertical: 32, gap: 10 },
   emptyTxt: { fontSize: 13, color: Colors.textSecondary },
-  permNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, backgroundColor: Colors.bgElevated, borderRadius: 10, padding: 12, marginTop: 8 },
-  permTxt: { flex: 1, fontSize: 11, color: Colors.textTertiary, lineHeight: 17 },
+  row: { flexDirection: 'row', gap: 14 },
+  lineCol: { alignItems: 'center', width: 20 },
+  dot: { width: 14, height: 14, borderRadius: 7, marginTop: 16 },
+  line: { flex: 1, width: 2, backgroundColor: Colors.borderSubtle, marginVertical: 4 },
+  content: { flex: 1, paddingBottom: 16 },
+  date: { fontSize: 11, color: Colors.textTertiary, marginTop: 14, marginBottom: 6 },
+  card: { backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 13, borderWidth: 1, borderColor: Colors.border, gap: 7 },
+  urgentCard: { borderColor: Colors.danger, borderWidth: 1.5, backgroundColor: 'rgba(248,81,73,0.04)' },
+  title: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
+  desc: { fontSize: 12, color: Colors.textSecondary, lineHeight: 18 },
+  actionBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.warningSubtle, borderRadius: 7, padding: 7 },
+  actionBannerTxt: { color: Colors.warning, fontSize: 11, fontWeight: '600' },
+  peopleRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  personChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.bgElevated, borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3 },
+  personTxt: { fontSize: 10, color: Colors.textTertiary },
 });
 
-// ─── AI Chat Styles ───────────────────────────────────────────────────────────
+// ─── Docs Styles ──────────────────────────────────────────────────────────────
+const dc = StyleSheet.create({
+  root: { gap: 0 },
+  searchInput: {
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: Colors.textPrimary,
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  uploadRow: { marginBottom: 14 },
+  uploadBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: 14, height: 50, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  uploadBtnTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  filterRow: { flexDirection: 'row', gap: 8, paddingBottom: 2 },
+  filter: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.border },
+  filterActive: { backgroundColor: Colors.primarySubtle, borderColor: Colors.primary },
+  filterTxt: { fontSize: 12, fontWeight: '500', color: Colors.textSecondary },
+  filterTxtActive: { color: Colors.primary, fontWeight: '700' },
+  sortRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  sortChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bgSecondary },
+  sortChipActive: { borderColor: Colors.primary, backgroundColor: Colors.primarySubtle },
+  sortChipTxt: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
+  sortChipTxtActive: { color: Colors.primary, fontWeight: '700' },
+  // Extra bottom room keeps last rows tappable above the global floating action button.
+  listContent: { paddingBottom: 130 },
+  docCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: Colors.bgSecondary, borderRadius: 13, padding: 13, marginBottom: 10, borderWidth: 1, borderColor: Colors.border },
+  docIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  docActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 4, marginTop: 2 },
+  docName: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
+  docMeta: { fontSize: 10, color: Colors.textTertiary, marginTop: 2 },
+  tagRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 6 },
+  tagChip: { fontSize: 10, color: Colors.primary, fontWeight: '700', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: Colors.primarySubtle },
+  statusRow: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  statusBadge: { fontSize: 10, fontWeight: '700', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  statusVerified: { color: Colors.success, backgroundColor: Colors.successSubtle },
+  statusPending: { color: Colors.warning, backgroundColor: Colors.warningSubtle },
+  toggleReadyBtn: { marginTop: 8, alignSelf: 'flex-start', backgroundColor: Colors.bgElevated, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
+  toggleReadyTxt: { color: Colors.textSecondary, fontSize: 11, fontWeight: '600' },
+  empty: { alignItems: 'center', paddingVertical: 24 },
+  emptyTitle: { fontSize: 13, color: Colors.textSecondary, marginTop: 6, marginBottom: 10 },
+  emptyBtn: { height: 36, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primarySubtle, borderWidth: 1, borderColor: Colors.primary },
+  emptyBtnTxt: { color: Colors.primary, fontSize: 12, fontWeight: '700' },
+  emptyTxt: { fontSize: 13, color: Colors.textSecondary },
+  uploadModalLayer: { ...StyleSheet.absoluteFillObject },
+  uploadModalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxWidth: 420,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  uploadModalSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    backgroundColor: Colors.bgSecondary,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  uploadModalTitle: { color: Colors.textPrimary, fontSize: 16, fontWeight: '800', marginBottom: 10 },
+  uploadOption: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 44, borderRadius: 10, paddingHorizontal: 10, backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
+  uploadOptionTxt: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600' },
+  tagHint: { color: Colors.textTertiary, fontSize: 11, marginTop: 8, lineHeight: 17 },
+  closeUploadBtn: { marginTop: 12, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border },
+  closeUploadTxt: { color: Colors.textSecondary, fontSize: 13, fontWeight: '700' },
+});
+
+// ─── AI Tab Styles ────────────────────────────────────────────────────────────
 const ai = StyleSheet.create({
-  root: { gap: 14 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.bgSecondary, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: Colors.goldSubtle },
-  avatarWrap: { width: 46, height: 46, borderRadius: 14, backgroundColor: Colors.goldSubtle, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 15, fontWeight: '800', color: Colors.gold },
-  sub: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
-  strategyPreview: { backgroundColor: Colors.bgSecondary, borderRadius: 12, padding: 12, borderLeftWidth: 3, borderLeftColor: Colors.gold, borderWidth: 1, borderColor: Colors.goldSubtle },
-  strategyLabel: { fontSize: 10, color: Colors.textTertiary, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 },
-  strategyText: { fontSize: 12, color: Colors.textSecondary, lineHeight: 19 },
-  suggestLabel: { fontSize: 10, color: Colors.textTertiary, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  promptBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.bgSecondary, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
-  promptTxt: { flex: 1, fontSize: 13, color: Colors.textPrimary },
-  openChatBtn: { marginTop: 6, borderRadius: 14, overflow: 'hidden' },
-  openChatGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
-  openChatTxt: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
+  root: { gap: 13 },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.bgSecondary, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: Colors.goldSubtle },
+  bannerIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: Colors.goldSubtle, alignItems: 'center', justifyContent: 'center' },
+  bannerTitle: { fontSize: 14, fontWeight: '800', color: Colors.gold },
+  bannerSub: { fontSize: 11, color: Colors.textSecondary, marginTop: 3 },
+  stratLabel: { fontSize: 10, fontWeight: '700', color: Colors.textTertiary, letterSpacing: 0.8, textTransform: 'uppercase' },
+  stratText: { fontSize: 13, color: Colors.textPrimary, lineHeight: 20, backgroundColor: Colors.bgSecondary, borderRadius: 12, padding: 13, borderWidth: 1, borderColor: Colors.goldSubtle },
+  qLabel: { fontSize: 10, fontWeight: '700', color: Colors.textTertiary, letterSpacing: 0.8, textTransform: 'uppercase' },
+  qBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.bgSecondary, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
+  qTxt: { flex: 1, fontSize: 13, color: Colors.textPrimary },
+  openBtn: { borderRadius: 13, overflow: 'hidden', marginTop: 4 },
+  openGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 15 },
+  openTxt: { fontSize: 14, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
 });
 
-// ─── Lawyer Tab Styles ────────────────────────────────────────────────────────
+// ─── Lawyer Styles ────────────────────────────────────────────────────────────
 const lw = StyleSheet.create({
-  root: { gap: 16 },
-  profileCard: { flexDirection: 'row', gap: 14, backgroundColor: Colors.bgSecondary, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: Colors.border },
-  avatar: { width: 60, height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  root: { gap: 14 },
+  card: { flexDirection: 'row', gap: 14, backgroundColor: Colors.bgSecondary, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  avatar: { width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   avatarTxt: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  designation: { fontSize: 12, color: Colors.textSecondary, marginTop: 3 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  name: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, flex: 1 },
+  desig: { fontSize: 11, color: Colors.textSecondary, marginTop: 3 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   rating: { fontSize: 12, fontWeight: '700', color: Colors.gold },
-  reviews: { fontSize: 11, color: Colors.textTertiary },
-  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: Colors.textTertiary },
-  exp: { fontSize: 11, color: Colors.textTertiary },
+  ratingCount: { fontSize: 10, color: Colors.textTertiary },
+  metaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: Colors.textTertiary },
+  exp: { fontSize: 10, color: Colors.textTertiary },
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
   onlineDot: { width: 7, height: 7, borderRadius: 4 },
   onlineTxt: { fontSize: 11, color: Colors.textSecondary },
-
+  ctaRow: { flexDirection: 'row', gap: 10 },
+  callBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: Colors.primary, borderRadius: 13, height: 50, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  callTxt: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  chatBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.primarySubtle, borderRadius: 13, height: 50, borderWidth: 1.5, borderColor: Colors.primary },
+  chatTxt: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   statsRow: { flexDirection: 'row', backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border },
   statItem: { flex: 1, alignItems: 'center' },
-  statVal: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
+  statVal: { fontSize: 17, fontWeight: '800', color: Colors.textPrimary },
   statLbl: { fontSize: 10, color: Colors.textSecondary, marginTop: 3 },
   statDiv: { width: 1, backgroundColor: Colors.border, marginVertical: 4 },
-
-  ctaRow: { flexDirection: 'row', gap: 10 },
-  callBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: 14, height: 50, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
-  callTxt: { fontSize: 15, fontWeight: '800', color: '#fff' },
-  chatBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: Colors.primarySubtle, borderRadius: 14, height: 50, borderWidth: 1.5, borderColor: Colors.primary },
-  chatTxt: { fontSize: 14, fontWeight: '700', color: Colors.primary },
-
-  changeSection: { backgroundColor: Colors.warningSubtle, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.warning + '30', gap: 6 },
-  changeSectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  changeSectionSub: { fontSize: 12, color: Colors.textSecondary, lineHeight: 19 },
-  changeBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: Colors.bgElevated, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: Colors.warning + '40', marginTop: 4 },
-  changeBtnTxt: { fontSize: 13, fontWeight: '700', color: Colors.warning },
-
-  specsBlock: { gap: 8 },
-  specsTitle: { fontSize: 10, color: Colors.textTertiary, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  specsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  specChip: { backgroundColor: Colors.primarySubtle, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(59,91,219,0.25)' },
-  specTxt: { fontSize: 11, fontWeight: '600', color: Colors.primary },
+  courtsBlock: { gap: 8 },
+  blockLabel: { fontSize: 9, fontWeight: '700', color: Colors.textTertiary, letterSpacing: 0.8, textTransform: 'uppercase' },
+  courtRow: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: Colors.bgSecondary, borderRadius: 10, padding: 11, borderWidth: 1, borderColor: Colors.border },
+  courtName: { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
+  courtSince: { fontSize: 11, color: Colors.textTertiary },
+  changeBox: { backgroundColor: Colors.warningSubtle, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.warning + '30', gap: 6 },
+  reviewBadge: { alignSelf: 'flex-start', backgroundColor: Colors.primarySubtle, borderWidth: 1, borderColor: Colors.primary + '40', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, marginBottom: 2 },
+  reviewBadgeTxt: { color: Colors.primary, fontSize: 10, fontWeight: '700' },
+  changeTitle: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
+  changeSub: { fontSize: 12, color: Colors.textSecondary, lineHeight: 18 },
+  changeBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, alignSelf: 'flex-start', backgroundColor: Colors.bgElevated, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, marginTop: 4, borderWidth: 1, borderColor: Colors.warning + '40' },
+  changeTxt: { fontSize: 12, fontWeight: '700', color: Colors.warning },
+  disabledBtn: { opacity: 0.55 },
+  escalateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 2, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9, backgroundColor: Colors.primarySubtle, borderWidth: 1, borderColor: Colors.primary + '44' },
+  escalateTxt: { fontSize: 11, fontWeight: '700', color: Colors.primary },
 });

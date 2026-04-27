@@ -64,20 +64,27 @@ export const Button: React.FC<Props> = ({
 };
 
 const styles = StyleSheet.create({
-  base: {
+  buttonBase: {
+    height: 48,
     borderRadius: 12,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  base: {
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   primary: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#5B6EF5',
   },
   secondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
+    backgroundColor: '#1F2937',
   },
   ghost: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
     backgroundColor: 'transparent',
   },
   gold: {
@@ -88,20 +95,20 @@ const styles = StyleSheet.create({
 });
 
 const sizes = StyleSheet.create({
-  sm: { height: 40, paddingHorizontal: 16 },
-  md: { height: 52, paddingHorizontal: 20 },
-  lg: { height: 56, paddingHorizontal: 24 },
+  sm: { height: 44, paddingHorizontal: 16 },
+  md: { height: 48, paddingHorizontal: 16 },
+  lg: { height: 48, paddingHorizontal: 20 },
 });
 
 const textColors = StyleSheet.create({
   primary:   { color: '#FFFFFF' },
-  secondary: { color: Colors.primary },
-  ghost:     { color: Colors.primary },
+  secondary: { color: '#D1D5DB' },
+  ghost:     { color: '#9CA3AF' },
   gold:      { color: Colors.textInverse },
 });
 
 const textSizes = StyleSheet.create({
   sm: { fontSize: 13 },
-  md: { fontSize: 15 },
-  lg: { fontSize: 16 },
+  md: { fontSize: 14 },
+  lg: { fontSize: 14 },
 });
