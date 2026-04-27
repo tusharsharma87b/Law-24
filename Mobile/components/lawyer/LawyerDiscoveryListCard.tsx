@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { Avatar } from '../ui/Avatar';
 import { Colors } from '../../constants/colors';
 import type { DiscoveryLawyer } from '../../constants/lawyerDiscovery';
+import { AppIcon } from '../ui/AppIcon';
 
 type Props = {
   item: DiscoveryLawyer;
@@ -41,7 +41,7 @@ export const LawyerDiscoveryListCard = React.memo(function LawyerDiscoveryListCa
           </View>
           <Text style={styles.category}>{item.categoryLabel}</Text>
           <View style={styles.ratingRow}>
-            <MaterialIcons name="star" size={14} color={Colors.gold} />
+            <AppIcon name="rating" size={14} color={Colors.gold} />
             <Text style={styles.rating}>{item.rating.toFixed(1)}</Text>
             <Text style={styles.respond}> · Responds in {item.responseTime}</Text>
           </View>

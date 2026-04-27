@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { AppIcon } from './AppIcon';
 
 interface Props {
   name: string;
@@ -29,7 +30,7 @@ export const Avatar: React.FC<Props> = ({
     return name.slice(0, 2).toUpperCase();
   };
 
-  const bgColor = color || Colors.primary;
+  const bgColor = color || '#2A3342';
   const fontSize = size * 0.35;
   const badgeSize = size * 0.28;
 
@@ -52,16 +53,16 @@ export const Avatar: React.FC<Props> = ({
             { width: badgeSize + 4, height: badgeSize + 4, borderRadius: (badgeSize + 4) / 2 },
           ]}
         >
-          <Text style={[styles.badgeIcon, { fontSize: badgeSize * 0.6 }]}>✓</Text>
+          <AppIcon name="verified" size={badgeSize * 0.62} color="#FFFFFF" strokeWidth={2} />
         </View>
       )}
 
-      {online && !verified && (
+      {online && (
         <View
           style={[
             styles.badge,
             styles.onlineDot,
-            { width: badgeSize, height: badgeSize, borderRadius: badgeSize / 2 },
+            { width: badgeSize, height: badgeSize, borderRadius: badgeSize / 2, top: 0, right: 0, bottom: undefined },
           ]}
         />
       )}
@@ -89,13 +90,14 @@ const styles = StyleSheet.create({
     borderColor: Colors.bgSecondary,
   },
   verifiedBadge: {
-    backgroundColor: Colors.gold,
+    backgroundColor: '#4F6EF7',
+    top: -2,
+    right: -2,
+    bottom: undefined,
   },
   onlineDot: {
     backgroundColor: Colors.success,
-  },
-  badgeIcon: {
-    color: Colors.textInverse,
-    fontWeight: '800',
+    borderWidth: 2,
+    borderColor: Colors.bgPrimary,
   },
 });

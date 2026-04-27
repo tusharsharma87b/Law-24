@@ -1,7 +1,14 @@
 /**
- * Auth store — in-memory only (no persistence).
- * The app always starts with isLoggedIn = false, so the login screen
- * is always shown on a fresh load / refresh. Users log in each session.
+ * Auth store — in-session only (no cross-refresh persistence).
+ *
+ * The persist middleware with createJSONStorage causes silent initialization
+ * errors in some Expo web/SPA configurations that result in a blank white page.
+ * We use plain Zustand for reliable cross-platform operation.
+ *
+ * Session behaviour:
+ *  • User stays logged in for the duration of the browser session / app session
+ *  • Refreshing the page requires logging in again (by design for a legal app)
+ *  • Logout clears auth state immediately
  */
 import { create } from 'zustand';
 
@@ -19,8 +26,8 @@ interface AuthState {
   isLoggedIn: boolean;
   user: User | null;
   whatsappUpdates: boolean;
-  login: (user: User) => void;
-  logout: () => void;
+  login:       (user: User) => void;
+  logout:      () => void;
   setWhatsapp: (val: boolean) => void;
 }
 
@@ -28,7 +35,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoggedIn: false,
   user: null,
   whatsappUpdates: true,
-  login:      (user) => set({ isLoggedIn: true, user }),
-  logout:     ()     => set({ isLoggedIn: false, user: null }),
-  setWhatsapp:(val)  => set({ whatsappUpdates: val }),
+  login:       (user) => set({ isLoggedIn: true, user }),
+  logout:      ()     => set({ isLoggedIn: false, user: null }),
+  setWhatsapp: (val)  => set({ whatsappUpdates: val }),
 }));

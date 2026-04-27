@@ -10,15 +10,13 @@ import React, {
   useCallback, useEffect, useMemo, useRef, useState,
 } from 'react';
 import {
-  Animated,
+  BackHandler,
   FlatList,
-  PanResponder,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -29,6 +27,7 @@ import {
   type AppNotification,
   type NotificationType,
 } from '../../store/useNotificationStore';
+import { BottomSheetWrapper } from '../ui/BottomSheetWrapper';
 
 // ─── Destination labels ───────────────────────────────────────────────────────
 
@@ -177,95 +176,16 @@ export function NotificationSheet({
   visible: boolean;
   onClose: () => void;
 }) {
-  const { height: screenH } = useWindowDimensions();
-  const sheetH = Math.round(screenH * 0.70);
-
   const { notifications, markAsRead, markAllAsRead } = useNotificationStore();
   const router = useRouter();
-
-  // ── Animation values ──────────────────────────────────────────────────────
-  const slideAnim   = useRef(new Animated.Value(sheetH)).current; // 0 = fully open
-  const backdropAnim = useRef(new Animated.Value(0)).current;
-  const dragY        = useRef(new Animated.Value(0)).current;     // drag delta
-  const [mounted, setMounted] = useState(false);
-  const isClosing = useRef(false);
-
-  // ── Open / close animation ────────────────────────────────────────────────
   useEffect(() => {
-    if (visible) {
-      isClosing.current = false;
-      setMounted(true);
-      dragY.setValue(0);
-      slideAnim.setValue(sheetH);
-      backdropAnim.setValue(0);
-      Animated.parallel([
-        Animated.spring(slideAnim, {
-          toValue: 0, useNativeDriver: true, speed: 22, bounciness: 2,
-        }),
-        Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-      ]).start();
-    } else {
-      if (isClosing.current) return;
-      isClosing.current = true;
-      Animated.parallel([
-        Animated.timing(slideAnim, { toValue: sheetH, duration: 220, useNativeDriver: true }),
-        Animated.timing(backdropAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start(({ finished }) => {
-        if (finished) { setMounted(false); dragY.setValue(0); }
-      });
-    }
-  }, [visible, sheetH]);
-
-  // ── Drag-to-dismiss (PanResponder on the handle zone) ─────────────────────
-  const DISMISS_THRESHOLD = 100; // px to drag before snap-dismiss
-
-  const panResponder = useRef(
-    PanResponder.create({
-      // Only claim gesture if moving downward
-      onMoveShouldSetPanResponder: (_, { dy, dx }) =>
-        dy > 6 && Math.abs(dy) > Math.abs(dx),
-      onPanResponderGrant: () => {
-        dragY.setOffset((dragY as any).__getValue());
-        dragY.setValue(0);
-      },
-      onPanResponderMove: (_, { dy }) => {
-        // Only drag downward
-        dragY.setValue(Math.max(0, dy));
-      },
-      onPanResponderRelease: (_, { dy, vy }) => {
-        dragY.flattenOffset();
-        const finalDy = (dragY as any).__getValue();
-        if (finalDy > DISMISS_THRESHOLD || vy > 0.5) {
-          // Dismiss: slide the rest of the way out
-          isClosing.current = true;
-          Animated.parallel([
-            Animated.timing(dragY, {
-              toValue: sheetH, duration: 200, useNativeDriver: true,
-            }),
-            Animated.timing(backdropAnim, {
-              toValue: 0, duration: 200, useNativeDriver: true,
-            }),
-          ]).start(({ finished }) => {
-            if (finished) {
-              dragY.setValue(0);
-              setMounted(false);
-              onClose();
-            }
-          });
-        } else {
-          // Not far enough — snap back
-          Animated.spring(dragY, {
-            toValue: 0, useNativeDriver: true, speed: 20, bounciness: 8,
-          }).start();
-        }
-      },
-      onPanResponderTerminate: () => {
-        Animated.spring(dragY, {
-          toValue: 0, useNativeDriver: true, speed: 20, bounciness: 8,
-        }).start();
-      },
-    }),
-  ).current;
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const unreadCount = useMemo(
@@ -293,21 +213,14 @@ export function NotificationSheet({
     (n: AppNotification) => {
       markAsRead(n.id);
       const route = resolveRoute(n);
-      // Close sheet first, then navigate
-      isClosing.current = true;
-      Animated.parallel([
-        Animated.timing(slideAnim, { toValue: sheetH, duration: 200, useNativeDriver: true }),
-        Animated.timing(backdropAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
-      ]).start(() => {
-        setMounted(false);
-        dragY.setValue(0);
-        onClose();
+      onClose();
+      setTimeout(() => {
         try {
           router.push(route as any);
-        } catch { /* route may not exist in dev */ }
-      });
+        } catch {}
+      }, 120);
     },
-    [markAsRead, onClose, router, slideAnim, backdropAnim, dragY, sheetH],
+    [markAsRead, onClose, router],
   );
 
   const renderItem = useCallback(
@@ -328,65 +241,24 @@ export function NotificationSheet({
     item.kind === 'section' ? item.id : item.data.id,
   []);
 
-  if (!mounted) return null;
-
-  // Combined translateY: open/close slide + finger drag
-  const combinedY = Animated.add(slideAnim, dragY);
-
-  // Backdrop dims as user drags down
-  const backdropOpacity = Animated.multiply(
-    backdropAnim,
-    dragY.interpolate({
-      inputRange: [0, DISMISS_THRESHOLD * 2],
-      outputRange: [1, 0],
-      extrapolate: 'clamp',
-    }),
-  );
-
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
-      {/* Dim overlay */}
-      <Animated.View
-        style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.55)', opacity: backdropOpacity }]}
-        pointerEvents="none"
-      />
-      {/* Tap-outside-to-close */}
-      <TouchableOpacity
-        style={StyleSheet.absoluteFillObject}
-        onPress={onClose}
-        activeOpacity={1}
-        accessible={false}
-      />
-
-      {/* Sheet panel */}
-      <Animated.View
-        style={[ns.sheet, { height: sheetH, transform: [{ translateY: combinedY }] }]}
-        pointerEvents="auto"
-      >
-        {/* ── Draggable handle ── */}
-        <View style={ns.handleZone} {...panResponder.panHandlers}>
-          <View style={ns.handle} />
-          <Text style={ns.dragHint}>drag down to close</Text>
+    <BottomSheetWrapper visible={visible} onClose={onClose} heightPercent={0.85} enableScroll={false}>
+      <View style={ns.header}>
+        <View>
+          <Text style={ns.headerTitle}>Notifications</Text>
+          {unreadCount > 0
+            ? <Text style={ns.headerSub}>{unreadCount} unread · long-press to mark read</Text>
+            : <Text style={ns.headerSub}>All caught up</Text>
+          }
         </View>
-
-        {/* ── Header ── */}
-        <View style={ns.header}>
-          <View>
-            <Text style={ns.headerTitle}>Notifications</Text>
-            {unreadCount > 0
-              ? <Text style={ns.headerSub}>{unreadCount} unread · long-press to mark read</Text>
-              : <Text style={ns.headerSub}>All caught up</Text>
-            }
-          </View>
-          {unreadCount > 0 && (
-            <TouchableOpacity style={ns.markAllBtn} onPress={markAllAsRead} activeOpacity={0.8}>
-              <MaterialIcons name="done-all" size={16} color={Colors.primary} />
-              <Text style={ns.markAllTxt}>Mark all read</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* ── Notification list ── */}
+        {unreadCount > 0 && (
+          <TouchableOpacity style={ns.markAllBtn} onPress={markAllAsRead} activeOpacity={0.8}>
+            <MaterialIcons name="done-all" size={16} color={Colors.primary} />
+            <Text style={ns.markAllTxt}>Mark all read</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      <View style={ns.listWrap}>
         <FlatList
           data={listItems}
           keyExtractor={keyExtractor}
@@ -396,45 +268,14 @@ export function NotificationSheet({
           ListEmptyComponent={<EmptyState />}
           keyboardShouldPersistTaps="handled"
         />
-      </Animated.View>
-    </View>
+      </View>
+    </BottomSheetWrapper>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const ns = StyleSheet.create({
-  sheet: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    backgroundColor: '#111827',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    elevation: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-  },
-
-  // Drag handle zone — tall enough for easy finger targeting
-  handleZone: {
-    alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 4,
-    gap: 3,
-  },
-  handle: {
-    width: 44, height: 4, borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  dragHint: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.2)',
-    letterSpacing: 0.5,
-    fontStyle: 'italic',
-  },
-
   // Header
   header: {
     flexDirection: 'row',
@@ -445,6 +286,7 @@ const ns = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
+  listWrap: { flex: 1 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
   headerSub: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
   markAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 2 },

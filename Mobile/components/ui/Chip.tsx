@@ -23,9 +23,9 @@ export const Chip: React.FC<Props> = ({ label, selected = false, onPress, style 
 
 const styles = StyleSheet.create({
   chip: {
-    height: 34,
     borderRadius: 100,
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.bgElevated,

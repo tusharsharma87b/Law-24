@@ -12,7 +12,7 @@ import { useNyayaStore } from '../store/useNyayaStore';
 
 export default function NyayaScreen() {
   const router = useRouter();
-  const { query: prefillQuery } = useLocalSearchParams<{ query?: string }>();
+  const { query: prefillQuery, prefilledQuestion, autoSend } = useLocalSearchParams<{ query?: string; prefilledQuestion?: string; autoSend?: string }>();
   const [input, setInput] = useState('');
   const scrollRef = useRef<ScrollView>(null);
   const { messages, isLoading, addUserMessage, addAIResponse, setLoading, clearSession } = useNyayaStore();
@@ -24,6 +24,14 @@ export default function NyayaScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!prefilledQuestion || autoSend !== '1' || messages.length > 0) return;
+    setInput(prefilledQuestion);
+    const timer = setTimeout(() => handleSend(prefilledQuestion), 50);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefilledQuestion, autoSend, messages.length]);
 
   const handleSend = (text?: string) => {
     const query = (text ?? input).trim();

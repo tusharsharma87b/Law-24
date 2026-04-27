@@ -136,7 +136,26 @@ export type DirectoryLawyer = {
   initials: string;
   avatarColor: string;
   courtType: CourtType;
+  queue: number;
+  lastSeen: string | null;
 };
+
+export type LawyerAvailability = {
+  isOnline: boolean;
+  queue: number;
+  lastSeen: string | null;
+};
+
+export const LAWYER_AVAILABILITY: Record<string, LawyerAvailability> = {
+  'LAW-001': { isOnline: false, queue: 0, lastSeen: '2 hrs ago' },
+  'LAW-002': { isOnline: false, queue: 0, lastSeen: '30 mins ago' },
+  'LAW-003': { isOnline: true, queue: 3, lastSeen: null },
+  'LAW-004': { isOnline: true, queue: 0, lastSeen: null },
+};
+
+export function getLawyerAvailability(profileId: string): LawyerAvailability {
+  return LAWYER_AVAILABILITY[profileId] ?? { isOnline: false, queue: 0, lastSeen: '1 hr ago' };
+}
 
 // ─── Filter & Sort Types ──────────────────────────────────────────────────────
 
@@ -206,6 +225,11 @@ function lawyerToDirectoryRow(
   city?: string,
   state?: string,
 ): DirectoryLawyer {
+  const availability = getLawyerAvailability(l.id);
+  const online = availability.isOnline;
+  const queue = availability.queue;
+  const lastSeen = availability.lastSeen;
+
   const mins = l.responseTimeMinutes;
   return {
     id: rowId,
@@ -218,7 +242,7 @@ function lawyerToDirectoryRow(
     rating: l.rating.average,
     reviews: l.rating.totalReviews,
     pricePerMin: l.fees.chatPerMinuteInr,
-    online: l.isOnline,
+    online,
     responseTime: `${mins} min${mins !== 1 ? 's' : ''}`,
     responseTimeMinutes: mins,
     languages: l.languages.slice(0, 3),
@@ -227,6 +251,8 @@ function lawyerToDirectoryRow(
     initials: l.initials,
     avatarColor: l.avatarColor,
     courtType,
+    queue,
+    lastSeen,
   };
 }
 

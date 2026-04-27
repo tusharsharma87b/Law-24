@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, Platform,
+  TouchableOpacity, Platform, Pressable,
+  TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
-import { useCaseStore } from '../../store/useCaseStore';
+import { getCTA, useCaseStore, type NewCaseForm } from '../../store/useCaseStore';
+import { AppIcon, type AppIconName } from '../../components/ui/AppIcon';
+import { getLawyersByCategory, type CategoryLawyer } from '../../constants/categoryLawyers';
+import DateField from '../../components/DateField';
+import { BottomSheetWrapper } from '../../components/ui/BottomSheetWrapper';
 
 const URGENCY: Record<string, { color: string; bg: string; label: string }> = {
   critical: { color: Colors.danger,  bg: Colors.dangerSubtle,  label: 'CRITICAL' },
@@ -25,18 +28,604 @@ const CATEGORY_LABEL: Record<string, string> = {
   civil:       'Civil',
 };
 
-const CATEGORY_ICON: Record<string, string> = {
-  matrimonial: 'family-restroom',
-  employment:  'work',
+const CATEGORY_ICON: Record<string, AppIconName> = {
+  matrimonial: 'lawyers',
+  employment:  'cases',
   criminal:    'gavel',
-  property:    'home-work',
-  civil:       'account-balance',
+  property:    'documents',
+  civil:       'scale',
 };
+
+// ─── New Case Form (bottom sheet) ────────────────────────────────────────────
+
+// Defined at MODULE level — never recreated on parent re-render.
+// If defined inside NewCaseSheet, React treats it as a new component type
+// on every state update → TextInput unmounts → keyboard focus lost after each char.
+const FormInput = React.memo(function FormInput({
+  label, value, placeholder, onChangeText,
+}: {
+  label: string; value: string; placeholder: string; onChangeText: (v: string) => void;
+}) {
+  return (
+    <View style={f.fieldWrap}>
+      <Text style={f.label}>{label}</Text>
+      <TextInput
+        style={f.input}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.textTertiary}
+        autoCorrect={false}
+        autoCapitalize="words"
+      />
+    </View>
+  );
+});
+
+const CATEGORY_OPTIONS = [
+  { value: 'matrimonial', label: 'Matrimonial' },
+  { value: 'employment',  label: 'Employment' },
+  { value: 'criminal',    label: 'Criminal' },
+  { value: 'property',    label: 'Property' },
+  { value: 'civil',       label: 'Civil' },
+];
+
+const URGENCY_OPTIONS: { value: NewCaseForm['urgency']; label: string; color: string }[] = [
+  { value: 'critical', label: 'Critical', color: Colors.danger },
+  { value: 'high',     label: 'High',     color: Colors.warning },
+  { value: 'medium',   label: 'Medium',   color: Colors.blue },
+  { value: 'low',      label: 'Low',      color: Colors.success },
+];
+
+const CASE_TYPE_OPTIONS = ['Civil', 'Criminal', 'Family', 'Labour'] as const;
+const COURT_OPTIONS = ['Sessions Court', 'High Court', 'Supreme Court'] as const;
+const CITY_OPTIONS = ['BLR', 'DEL', 'MUM', 'HYD', 'CHE'] as const;
+const FIR_PATTERN = /^[A-Z]{2,}\/[A-Z]{3}\/\d{4}\/\d+$/;
+
+const CATEGORY_TO_LAWYER_MAP: Record<string, string> = {
+  matrimonial: 'Family Law',
+  criminal: 'Criminal Law',
+  property: 'Property & Real Estate',
+  employment: 'Employment & Labour',
+  civil: 'Documentation & Civil',
+};
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function getExperienceYears(seed: string): number {
+  let acc = 0;
+  for (let i = 0; i < seed.length; i += 1) acc += seed.charCodeAt(i);
+  return 5 + (acc % 11);
+}
+
+function dateToISO(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+type LawyerMode = 'platform' | 'external';
+
+type ExternalLawyer = {
+  name: string;
+  phone: string;
+  email: string;
+  firm: string;
+};
+
+function NewCaseSheet({
+  visible,
+  onClose,
+  onSubmit,
+  lockedCategory,
+  formMode = 'create',
+  initialCaseData,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (form: NewCaseForm) => void;
+  lockedCategory?: string;
+  formMode?: 'create' | 'edit';
+  initialCaseData?: any;
+}) {
+  const [form, setForm] = useState<NewCaseForm>({
+    category: lockedCategory || 'matrimonial', title: '', section: '',
+    caseType: '', caseNumber: '', court: '', courtName: '', city: '', firYear: '', judge: '',
+    filedDate: '', nextHearing: '', notes: '', urgency: 'medium',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [mode, setMode] = useState<LawyerMode>('platform');
+  const [showLawyerList, setShowLawyerList] = useState(false);
+  const [selectedLawyer, setSelectedLawyer] = useState<CategoryLawyer | null>(null);
+  const [ext, setExt] = useState<ExternalLawyer>({ name: '', phone: '', email: '', firm: '' });
+  const [filedDate, setFiledDate] = useState<Date | null>(null);
+  const [hearingDate, setHearingDate] = useState<Date | null>(null);
+
+  const set = (key: keyof NewCaseForm, val: string) =>
+    setForm((f) => ({ ...f, [key]: val }));
+
+  const recommendedLawyers = React.useMemo(() => {
+    const mappedCategory = CATEGORY_TO_LAWYER_MAP[form.category] ?? 'Family Law';
+    return getLawyersByCategory(mappedCategory);
+  }, [form.category]);
+
+  const setCaseNumber = (value: string) => {
+    const upper = value.toUpperCase();
+    setForm((prev) => ({ ...prev, caseNumber: upper }));
+    if (errors.caseNumber) setErrors((prev) => ({ ...prev, caseNumber: '' }));
+    const parts = upper.split('/');
+    if (parts.length >= 4) {
+      const cityCode = parts[1];
+      const year = parts[2];
+      if ((CITY_OPTIONS as readonly string[]).includes(cityCode)) {
+        setForm((prev) => ({ ...prev, city: cityCode }));
+      }
+      if (/^\d{4}$/.test(year)) {
+        setForm((prev) => ({ ...prev, firYear: year }));
+      }
+    }
+  };
+
+  const setJudge = (value: string) => {
+    const cleaned = value.replace(/\s+/g, ' ').trimStart();
+    const capitalized = cleaned.replace(/\b\w/g, (ch) => ch.toUpperCase());
+    set('judge', capitalized);
+  };
+
+  const validate = (nextForm: NewCaseForm, external: ExternalLawyer, selectedMode: LawyerMode, filed: Date | null, hearing: Date | null) => {
+    const nextErrors: Record<string, string> = {};
+    if (!nextForm.section.trim()) nextErrors.section = 'Section / Act is required';
+    if (!nextForm.title.trim()) nextErrors.title = 'Case title is required';
+    if (!nextForm.caseType) nextErrors.caseType = 'Select case type';
+    if (!FIR_PATTERN.test(nextForm.caseNumber)) nextErrors.caseNumber = 'Enter valid FIR format (e.g. DV/BLR/2026/1234)';
+    if (!nextForm.courtName) nextErrors.courtName = 'Select court';
+    if (!nextForm.city) nextErrors.city = 'Select city';
+    if (!filed) nextErrors.filedDate = 'Filed date required';
+    if (!hearing) nextErrors.nextHearing = 'Hearing date required';
+    if (filed && hearing && hearing <= filed) {
+      nextErrors.nextHearing = 'Hearing date must be after filed date';
+    }
+    if (selectedMode === 'external') {
+      if (external.name.trim().length < 3) nextErrors.extName = 'Lawyer name must be at least 3 characters';
+      if (!/^\d{10}$/.test(external.phone.replace(/\D/g, ''))) nextErrors.extPhone = 'Enter valid 10-digit phone number';
+      if (external.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(external.email.trim())) nextErrors.extEmail = 'Enter valid email';
+    } else if (selectedMode === 'platform' && selectedLawyer && showLawyerList) {
+      // selected lawyer should collapse list for cleaner UX
+      setShowLawyerList(false);
+    }
+    if (selectedMode === 'platform' && !selectedLawyer && showLawyerList === false) {
+      // no hard error (optional assignment), keep optional flow
+    }
+    return nextErrors;
+  };
+
+  const isLawyerSet = mode === 'platform' ? !!selectedLawyer : ext.name.trim().length >= 3 && /^\d{10}$/.test(ext.phone.replace(/\D/g, ''));
+  const isFormValid = React.useMemo(
+    () => Object.keys(validate(form, ext, mode, filedDate, hearingDate)).length === 0,
+    [form, ext, mode, filedDate, hearingDate, selectedLawyer, showLawyerList]
+  );
+
+  React.useEffect(() => {
+    if (lockedCategory) {
+      setForm((prev) => ({ ...prev, category: lockedCategory }));
+    }
+  }, [lockedCategory]);
+
+  React.useEffect(() => {
+    if (!visible || formMode !== 'edit' || !initialCaseData) return;
+    const hearingRaw = initialCaseData.nextHearing || initialCaseData.hearingDate || '';
+    const filedRaw = initialCaseData.filedDate || '';
+    const normalizeDate = (raw: string): Date | null => {
+      if (!raw) return null;
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) return d;
+      const d2 = new Date(`${raw}T00:00:00`);
+      return Number.isNaN(d2.getTime()) ? null : d2;
+    };
+    const c = initialCaseData as any;
+    setForm({
+      category: lockedCategory || c.category || 'matrimonial',
+      title: c.title || '',
+      section: c.section || c.chips?.[0] || '',
+      caseType: c.caseType || c.type || '',
+      caseNumber: c.caseNumber || '',
+      court: c.court || '',
+      courtName: c.courtName || (c.court || '').split(',')[0]?.trim() || '',
+      city: c.city || (c.court || '').split(',')[1]?.trim() || '',
+      firYear: c.firYear || '',
+      judge: c.judge || '',
+      filedDate: c.filedDate || '',
+      nextHearing: hearingRaw || '',
+      notes: c.notes || '',
+      assignedLawyerId: c.assignedLawyerId,
+      assignedLawyerName: c.assignedLawyerName || c.lawyer?.name,
+      urgency: c.urgency || 'medium',
+    });
+    setFiledDate(normalizeDate(filedRaw));
+    setHearingDate(normalizeDate(hearingRaw));
+    if (c.assignedLawyerName || c.lawyer?.name) {
+      setMode('external');
+      setExt((prev) => ({
+        ...prev,
+        name: c.assignedLawyerName || c.lawyer?.name || '',
+      }));
+    }
+  }, [visible, formMode, initialCaseData, lockedCategory]);
+
+  if (!visible) return <View pointerEvents="none" />;
+
+  const handleSubmit = () => {
+    const nextErrors = validate(form, ext, mode, filedDate, hearingDate);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+    const court = `${form.courtName}, ${form.city}`;
+    const payload = {
+      category: form.category,
+      court: form.courtName,
+      city: form.city,
+      caseNumber: form.caseNumber,
+      filedDate: filedDate ? formatDate(filedDate) : '',
+      hearingDate: hearingDate ? formatDate(hearingDate) : '',
+      urgency: form.urgency,
+      lawyer: mode === 'platform'
+        ? { type: 'platform', lawyerId: selectedLawyer?.id ?? null }
+        : { type: 'external', ...ext },
+    };
+    onSubmit({
+      ...form,
+      category: lockedCategory || form.category,
+      court,
+      filedDate: filedDate ? formatDate(filedDate) : '',
+      nextHearing: hearingDate ? formatDate(hearingDate) : '',
+      assignedLawyerId: mode === 'platform' ? selectedLawyer?.id : undefined,
+      assignedLawyerName: mode === 'platform' ? selectedLawyer?.name : ext.name.trim() || undefined,
+    });
+    // Reset form
+    setForm({
+      category: lockedCategory || 'matrimonial', title: '', section: '', caseType: '', caseNumber: '', court: '', courtName: '', city: '', firYear: '',
+      judge: '', filedDate: '', nextHearing: '', notes: '', urgency: 'medium',
+    });
+    setMode('platform');
+    setSelectedLawyer(null);
+    setShowLawyerList(false);
+    setExt({ name: '', phone: '', email: '', firm: '' });
+    setFiledDate(null);
+    setHearingDate(null);
+    setErrors({});
+  };
+
+  return (
+    <BottomSheetWrapper visible={visible} onClose={onClose} heightPercent={0.9} enableScroll={false}>
+      <View style={f.sheetHeader}>
+        <View>
+          <Text style={f.sheetTitle}>{formMode === 'edit' ? 'Edit Case Details' : 'Register New Case'}</Text>
+          <Text style={f.sheetSub}>{formMode === 'edit' ? 'Update details and save changes' : 'Fill basic details — you can update more later'}</Text>
+        </View>
+        <TouchableOpacity onPress={onClose} hitSlop={12}>
+          <AppIcon name="close" size={20} color={Colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView
+          style={f.scroll}
+          contentContainerStyle={f.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
+            {/* Category */}
+            <Text style={f.label}>Category *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={f.catRow} style={{ marginBottom: 16 }}>
+              {CATEGORY_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[f.catChip, form.category === opt.value && f.catChipActive]}
+                  onPress={() => !lockedCategory && set('category', opt.value)}
+                  activeOpacity={0.8}
+                  disabled={!!lockedCategory}
+                >
+                  <Text style={[f.catChipTxt, form.category === opt.value && f.catChipTxtActive]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            {!!lockedCategory && <Text style={f.lockedHint}>Category is fixed for this case group.</Text>}
+
+            {/* Assign lawyer */}
+            <Text style={f.label}>Assign Lawyer (Optional)</Text>
+            <View style={f.segment}>
+              <Pressable onPress={() => setMode('platform')} style={[f.segmentBtn, mode === 'platform' && f.segmentBtnActive]}>
+                <Text style={[f.segmentTxt, mode === 'platform' && f.segmentTxtActive]}>From Law24</Text>
+              </Pressable>
+              <Pressable onPress={() => setMode('external')} style={[f.segmentBtn, mode === 'external' && f.segmentBtnActive]}>
+                <Text style={[f.segmentTxt, mode === 'external' && f.segmentTxtActive]}>My Lawyer</Text>
+              </Pressable>
+            </View>
+            {isLawyerSet && (
+              <View style={f.assignedTick}>
+                <Text style={f.assignedTickTxt}>✓ Lawyer assigned</Text>
+              </View>
+            )}
+
+            {mode === 'platform' ? (
+              <>
+                <TouchableOpacity style={f.inputBox} onPress={() => setShowLawyerList((p) => !p)} activeOpacity={0.85}>
+                  <Text style={selectedLawyer ? f.inputBoxValue : f.inputBoxPlaceholder}>
+                    {selectedLawyer ? selectedLawyer.name : 'Select your lawyer'}
+                  </Text>
+                  <AppIcon name="forward" size={16} color={Colors.textTertiary} />
+                </TouchableOpacity>
+                {!selectedLawyer && (
+                  <>
+                    <Text style={f.helper}>Don’t have a lawyer? We’ll recommend the best match.</Text>
+                    <TouchableOpacity style={f.findBtn} onPress={() => setShowLawyerList(true)} activeOpacity={0.85}>
+                      <Text style={f.findBtnTxt}>Find Lawyer for Me</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {showLawyerList && !selectedLawyer && (
+                  <View style={f.recommendWrap}>
+                    {recommendedLawyers.map((lawyer) => (
+                      <TouchableOpacity
+                        key={lawyer.id}
+                        style={f.recommendCard}
+                        onPress={() => {
+                          setSelectedLawyer(lawyer);
+                          setShowLawyerList(false);
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <Text style={f.recommendName}>{lawyer.name}</Text>
+                        <Text style={f.recommendMeta}>⭐ {lawyer.rating} • {getExperienceYears(lawyer.id)} yrs • ₹{lawyer.price}/min</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={f.externalWrap}>
+                <View style={f.fieldWrap}>
+                  <Text style={f.label}>Lawyer Name *</Text>
+                  <TextInput
+                    style={f.input}
+                    placeholder="Lawyer Name *"
+                    placeholderTextColor={Colors.textTertiary}
+                    value={ext.name}
+                    onChangeText={(v) => setExt((s) => ({ ...s, name: v }))}
+                    autoCapitalize="words"
+                  />
+                  {!!errors.extName && <Text style={f.errorTxt}>{errors.extName}</Text>}
+                </View>
+                <View style={f.fieldWrap}>
+                  <Text style={f.label}>Phone Number *</Text>
+                  <TextInput
+                    style={f.input}
+                    placeholder="Phone Number *"
+                    placeholderTextColor={Colors.textTertiary}
+                    keyboardType="phone-pad"
+                    value={ext.phone}
+                    onChangeText={(v) => setExt((s) => ({ ...s, phone: v.replace(/[^\d]/g, '').slice(0, 10) }))}
+                  />
+                  {!!errors.extPhone && <Text style={f.errorTxt}>{errors.extPhone}</Text>}
+                </View>
+                <View style={f.fieldWrap}>
+                  <Text style={f.label}>Email (Optional)</Text>
+                  <TextInput
+                    style={f.input}
+                    placeholder="Email (optional)"
+                    placeholderTextColor={Colors.textTertiary}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={ext.email}
+                    onChangeText={(v) => setExt((s) => ({ ...s, email: v.trim() }))}
+                  />
+                  {!!errors.extEmail && <Text style={f.errorTxt}>{errors.extEmail}</Text>}
+                </View>
+                <View style={f.fieldWrap}>
+                  <Text style={f.label}>Law Firm (Optional)</Text>
+                  <TextInput
+                    style={f.input}
+                    placeholder="Law Firm (optional)"
+                    placeholderTextColor={Colors.textTertiary}
+                    value={ext.firm}
+                    onChangeText={(v) => setExt((s) => ({ ...s, firm: v }))}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Primary section/act */}
+            <FormInput label="Section / Act *" value={form.section} placeholder="e.g. DV Act, Section 498A, Section 125" onChangeText={(v) => set('section', v)} />
+            {!!errors.section && <Text style={f.errorTxt}>{errors.section}</Text>}
+            <FormInput label="Case Title *" value={form.title} placeholder="e.g. DV Application — Bengaluru HC" onChangeText={(v) => set('title', v)} />
+            {!!errors.title && <Text style={f.errorTxt}>{errors.title}</Text>}
+            <Text style={f.label}>Case Type *</Text>
+            <View style={f.optionRow}>
+              {CASE_TYPE_OPTIONS.map((opt) => (
+                <TouchableOpacity key={opt} style={[f.optionChip, form.caseType === opt && f.optionChipActive]} onPress={() => set('caseType', opt)} activeOpacity={0.85}>
+                  <Text style={[f.optionChipTxt, form.caseType === opt && f.optionChipTxtActive]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {!!errors.caseType && <Text style={f.errorTxt}>{errors.caseType}</Text>}
+
+            <FormInput label="Case / FIR Number *" value={form.caseNumber} placeholder="e.g. DV/BLR/2026/1234" onChangeText={setCaseNumber} />
+            {!!errors.caseNumber && <Text style={f.errorTxt}>{errors.caseNumber}</Text>}
+
+            <Text style={f.label}>Court Name *</Text>
+            <View style={f.optionRow}>
+              {COURT_OPTIONS.map((opt) => (
+                <TouchableOpacity key={opt} style={[f.optionChip, form.courtName === opt && f.optionChipActive]} onPress={() => set('courtName', opt)} activeOpacity={0.85}>
+                  <Text style={[f.optionChipTxt, form.courtName === opt && f.optionChipTxtActive]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {!!errors.courtName && <Text style={f.errorTxt}>{errors.courtName}</Text>}
+
+            <Text style={f.label}>City *</Text>
+            <View style={f.optionRow}>
+              {CITY_OPTIONS.map((opt) => (
+                <TouchableOpacity key={opt} style={[f.optionChip, form.city === opt && f.optionChipActive]} onPress={() => set('city', opt)} activeOpacity={0.85}>
+                  <Text style={[f.optionChipTxt, form.city === opt && f.optionChipTxtActive]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {!!errors.city && <Text style={f.errorTxt}>{errors.city}</Text>}
+
+            {!!form.firYear && <Text style={f.autoFillTxt}>Auto-filled from FIR: Year {form.firYear}, City {form.city}</Text>}
+
+            <FormInput label="Presiding Judge (Optional)" value={form.judge} placeholder="e.g. Hon. Justice R. Kumar" onChangeText={setJudge} />
+            <FormInput label="Notes (Optional)" value={form.notes ?? ''} placeholder="Add brief notes for this case" onChangeText={(v) => set('notes', v)} />
+
+            <DateField
+              label="Filed Date *"
+              value={filedDate ? dateToISO(filedDate) : ''}
+              maximumDate={dateToISO(new Date())}
+              onChange={(iso) => {
+                const selected = new Date(`${iso}T00:00:00`);
+                setFiledDate(selected);
+                if (hearingDate && hearingDate <= selected) setHearingDate(null);
+                if (errors.filedDate) setErrors((prev) => ({ ...prev, filedDate: '' }));
+              }}
+            />
+            {!!errors.filedDate && <Text style={f.errorTxt}>{errors.filedDate}</Text>}
+
+            <DateField
+              label="Next Hearing Date *"
+              value={hearingDate ? dateToISO(hearingDate) : ''}
+              minimumDate={filedDate ? dateToISO(new Date(filedDate.getTime() + 24 * 60 * 60 * 1000)) : dateToISO(new Date())}
+              onChange={(iso) => {
+                const selected = new Date(`${iso}T00:00:00`);
+                setHearingDate(selected);
+                if (errors.nextHearing) setErrors((prev) => ({ ...prev, nextHearing: '' }));
+              }}
+            />
+            {!!errors.nextHearing && <Text style={f.errorTxt}>{errors.nextHearing}</Text>}
+
+            {/* Urgency */}
+            <Text style={[f.label, { marginBottom: 8 }]}>Urgency Level</Text>
+            <View style={f.urgRow}>
+              {URGENCY_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[f.urgChip, form.urgency === opt.value && { borderColor: opt.color, backgroundColor: opt.color + '1A' }]}
+                  onPress={() => setForm((prev) => ({ ...prev, urgency: opt.value }))}
+                  activeOpacity={0.8}
+                >
+                  {form.urgency === opt.value && <View style={[f.urgDot, { backgroundColor: opt.color }]} />}
+                  <Text style={[f.urgTxt, form.urgency === opt.value && { color: opt.color, fontWeight: '700' }]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={{ marginTop: 20 }} />
+            {/* Submit */}
+            <View style={f.submitWrap}>
+            <TouchableOpacity
+              style={[f.submitBtn, !isFormValid && f.submitBtnDim]}
+              onPress={handleSubmit}
+              activeOpacity={0.88}
+              disabled={!isFormValid}
+            >
+              <AppIcon name="plus" size={18} color="#fff" />
+              <Text style={f.submitTxt}>{formMode === 'edit' ? 'Save Changes' : 'Create Case'}</Text>
+            </TouchableOpacity>
+            </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </BottomSheetWrapper>
+  );
+}
 
 export default function CasesScreen() {
   const router = useRouter();
-  const { cases } = useCaseStore();
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const pathname = usePathname();
+  const params = useLocalSearchParams<{ openNew?: string; category?: string; editCaseId?: string; source?: string }>();
+  const { cases, addCase, updateCase, refreshStatuses } = useCaseStore();
+  const [showNewCaseForm, setShowNewCaseForm] = useState(false);
+  const [lockedCategory, setLockedCategory] = useState<string | undefined>(undefined);
+  const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
+  const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
+  const openFromParamsHandledRef = useRef(false);
+  // Track which categories are COLLAPSED (default: none — all start expanded)
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
+  const dataLoaded = Array.isArray(cases);
+  if (!dataLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.bgPrimary }}>
+        <Text style={{ color: Colors.textPrimary }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  const toggleCat = (cat: string) => {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);   // re-expand
+      else next.add(cat);                     // collapse
+      return next;
+    });
+  };
+
+  const handleAddCase = (form: NewCaseForm) => {
+    if (formMode === 'edit' && editingCaseId) {
+      const original = (cases as any[]).find((c) => c.id === editingCaseId);
+      if (!original) return;
+      updateCase(editingCaseId, {
+        ...original,
+        ...form,
+        type: form.caseType,
+        section: form.section,
+        chips: form.section ? [form.section] : original.chips,
+        court: `${form.courtName || ''}${form.city ? `, ${form.city}` : ''}`.trim(),
+        courtName: form.courtName,
+        city: form.city,
+        nextHearing: form.nextHearing,
+        hearingDate: form.nextHearing,
+        filedDate: form.filedDate,
+      } as any);
+      setEditingCaseId(null);
+      setFormMode('create');
+      setLockedCategory(undefined);
+      setShowNewCaseForm(false);
+      router.push({ pathname: '/case/[id]', params: { id: editingCaseId } });
+      return;
+    }
+    const newId = addCase({
+      ...form,
+      category: lockedCategory || form.category,
+    });
+    setLockedCategory(undefined);
+    setShowNewCaseForm(false);
+    router.push({ pathname: '/case/[id]', params: { id: newId } });
+  };
+
+  useEffect(() => {
+    refreshStatuses();
+  }, [refreshStatuses]);
+
+  useEffect(() => {
+    const validSource = ['subcategory', 'case_selector_add', 'edit_case'].includes(params.source ?? '');
+    const contextTriggered =
+      validSource ||
+      Boolean(params.editCaseId && params.source === 'edit_case') ||
+      Boolean(params.category && params.source === 'case_selector_add');
+    if (params.openNew === '1' && contextTriggered) {
+      if (openFromParamsHandledRef.current) return;
+      openFromParamsHandledRef.current = true;
+      setLockedCategory(params.category || undefined);
+      setFormMode(params.editCaseId ? 'edit' : 'create');
+      setEditingCaseId(params.editCaseId || null);
+      setShowNewCaseForm(true);
+      // Consume web query so revisiting /cases doesn't auto-open again.
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.history.replaceState({}, '', pathname || '/cases');
+      }
+    } else {
+      openFromParamsHandledRef.current = false;
+    }
+  }, [params.openNew, params.category, params.editCaseId, params.source, pathname]);
 
   // Group cases by category
   const grouped = cases.reduce<Record<string, typeof cases>>((acc, c) => {
@@ -56,8 +645,8 @@ export default function CasesScreen() {
           <Text style={s.title}>Case OS</Text>
           <Text style={s.sub}>{cases.length} active {cases.length === 1 ? 'case' : 'cases'}</Text>
         </View>
-        <TouchableOpacity style={s.newBtn} activeOpacity={0.82}>
-          <MaterialIcons name="add" size={16} color={Colors.primary} />
+        <TouchableOpacity style={s.newBtn} activeOpacity={0.82} onPress={() => { setLockedCategory(undefined); setEditingCaseId(null); setFormMode('create'); setShowNewCaseForm(true); }}>
+          <AppIcon name="plus" size={16} color={Colors.primary} />
           <Text style={s.newTxt}>New Case</Text>
         </TouchableOpacity>
       </View>
@@ -71,16 +660,12 @@ export default function CasesScreen() {
             {/* Category Header */}
             <TouchableOpacity
               style={s.catHeader}
-              onPress={() => setExpandedCategory(expandedCategory === cat ? null : cat)}
+              onPress={() => toggleCat(cat)}
               activeOpacity={0.8}
             >
               <View style={s.catLeft}>
                 <View style={s.catIconWrap}>
-                  <MaterialIcons
-                    name={(CATEGORY_ICON[cat] ?? 'folder') as any}
-                    size={16}
-                    color={Colors.primary}
-                  />
+                  <AppIcon name={CATEGORY_ICON[cat] ?? 'documents'} size={16} color={Colors.primary} />
                 </View>
                 <Text style={s.catTitle}>
                   {CATEGORY_LABEL[cat] ?? cat} Cases
@@ -89,17 +674,23 @@ export default function CasesScreen() {
                   <Text style={s.catCountTxt}>{catCases.length}</Text>
                 </View>
               </View>
-              <MaterialIcons
-                name={expandedCategory === cat ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                size={18}
-                color={Colors.textTertiary}
-              />
+              <View style={{ transform: [{ rotate: collapsedCats.has(cat) ? '90deg' : '-90deg' }] }}>
+                <AppIcon name="forward" size={16} color={Colors.textTertiary} />
+              </View>
             </TouchableOpacity>
 
-            {/* Case Cards */}
-            {catCases.map((c) => {
+            {/* Case Cards — hidden when category is collapsed */}
+            {!collapsedCats.has(cat) && catCases.map((c) => {
               const u = URGENCY[(c as any).urgency] ?? URGENCY.medium;
               const caseAny = c as any;
+              const timelineFlow = Array.isArray(caseAny.timelineFlow) ? caseAny.timelineFlow : [];
+              const doneCount = timelineFlow.filter((t: any) => t.done).length;
+              const progress = timelineFlow.length ? doneCount / timelineFlow.length : 0;
+              const hearingTs = caseAny.nextHearing ? new Date(caseAny.nextHearing).getTime() : Number.NaN;
+              const now = Date.now();
+              const inThreeDays = Number.isFinite(hearingTs) && hearingTs >= now && hearingTs <= now + 3 * 24 * 60 * 60 * 1000;
+              const statusText = caseAny.status === 'completed' ? 'Completed' : 'Active';
+              const ctaText = getCTA(caseAny.lawyer, caseAny.urgency);
               return (
                 <TouchableOpacity
                   key={c.id}
@@ -124,11 +715,16 @@ export default function CasesScreen() {
 
                   {/* Case title */}
                   <Text style={s.caseTitle}>{c.title}</Text>
+                  <View style={s.statusRow}>
+                    <Text style={[s.statusPill, caseAny.status === 'completed' && s.statusCompleted]}>{statusText}</Text>
+                    {(caseAny.priority || caseAny.urgency === 'critical') && <Text style={s.priorityPill}>Critical</Text>}
+                    {inThreeDays && <Text style={s.upcomingPill}>Upcoming</Text>}
+                  </View>
 
                   {/* Next hearing highlight */}
                   {caseAny.nextHearing && (
                     <View style={s.hearingRow}>
-                      <MaterialIcons name="event" size={13} color={Colors.primary} />
+                      <AppIcon name="calendar" size={13} color={Colors.primary} />
                       <Text style={s.hearingTxt}>Next hearing: <Text style={s.hearingDate}>{caseAny.nextHearing}</Text></Text>
                     </View>
                   )}
@@ -136,7 +732,7 @@ export default function CasesScreen() {
                   {/* Court + Judge */}
                   {caseAny.court && (
                     <View style={s.courtRow}>
-                      <MaterialIcons name="account-balance" size={12} color={Colors.textTertiary} />
+                      <AppIcon name="scale" size={12} color={Colors.textTertiary} />
                       <Text style={s.courtTxt} numberOfLines={1}>{caseAny.court}</Text>
                     </View>
                   )}
@@ -157,6 +753,12 @@ export default function CasesScreen() {
                       <Text style={s.metaLabel}>Stage</Text>
                       <Text style={s.metaValue} numberOfLines={1}>{c.stage}</Text>
                     </View>
+                  </View>
+                  <View style={s.progressWrap}>
+                    <View style={s.progressTrack}>
+                      <View style={[s.progressFill, { width: `${Math.max(6, Math.round(progress * 100))}%` }]} />
+                    </View>
+                    <Text style={s.progressTxt}>Progress {Math.round(progress * 100)}%</Text>
                   </View>
 
                   {/* Stage progress */}
@@ -183,7 +785,7 @@ export default function CasesScreen() {
                   {/* Pending actions count */}
                   {caseAny.pendingActions?.length > 0 && (
                     <View style={s.pendingRow}>
-                      <MaterialIcons name="pending-actions" size={13} color={Colors.warning} />
+                      <AppIcon name="time" size={13} color={Colors.warning} />
                       <Text style={s.pendingTxt}>
                         {caseAny.pendingActions.length} pending {caseAny.pendingActions.length === 1 ? 'action' : 'actions'}
                       </Text>
@@ -193,12 +795,9 @@ export default function CasesScreen() {
                   {/* Footer: lawyer + arrow */}
                   <View style={s.cardFooter}>
                     <View style={s.lawyerRow}>
-                      <LinearGradient
-                        colors={['#4F46E5', '#7C3AED']}
-                        style={s.lawyerAvatar}
-                      >
+                      <View style={s.lawyerAvatar}>
                         <Text style={s.lawyerInitials}>{c.lawyer.initials}</Text>
-                      </LinearGradient>
+                      </View>
                       <View>
                         <Text style={s.lawyerName}>{c.lawyer.name}</Text>
                         <View style={s.lawyerOnlineRow}>
@@ -208,8 +807,8 @@ export default function CasesScreen() {
                       </View>
                     </View>
                     <View style={s.viewBtn}>
-                      <Text style={s.viewBtnTxt}>View</Text>
-                      <MaterialIcons name="arrow-forward" size={14} color={Colors.primary} />
+                      <Text style={s.viewBtnTxt}>{ctaText}</Text>
+                      <AppIcon name="forward" size={14} color={Colors.primary} />
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -221,12 +820,12 @@ export default function CasesScreen() {
         {cases.length === 0 && (
           <View style={s.empty}>
             <View style={s.emptyIcon}>
-              <MaterialIcons name="work-outline" size={36} color={Colors.textTertiary} />
+              <AppIcon name="cases" size={34} color={Colors.textTertiary} />
             </View>
             <Text style={s.emptyTitle}>No active cases</Text>
             <Text style={s.emptySub}>Start with NyayaAI to get guidance and create your first case</Text>
             <TouchableOpacity style={s.emptyBtn} activeOpacity={0.85}>
-              <MaterialIcons name="auto-awesome" size={16} color="#fff" />
+              <AppIcon name="sparkles" size={16} color="#fff" />
               <Text style={s.emptyBtnTxt}>Ask NyayaAI</Text>
             </TouchableOpacity>
           </View>
@@ -235,6 +834,21 @@ export default function CasesScreen() {
         {/* Bottom padding to clear tab bar */}
         <View style={{ height: 110 }} />
       </ScrollView>
+
+      {/* New Case Form Sheet */}
+      <NewCaseSheet
+        visible={showNewCaseForm}
+        onClose={() => {
+          setShowNewCaseForm(false);
+          setLockedCategory(undefined);
+          setFormMode('create');
+          setEditingCaseId(null);
+        }}
+        onSubmit={handleAddCase}
+        lockedCategory={lockedCategory}
+        formMode={formMode}
+        initialCaseData={editingCaseId ? (cases as any[]).find((c) => c.id === editingCaseId) : undefined}
+      />
     </View>
   );
 }
@@ -297,6 +911,35 @@ const s = StyleSheet.create({
   urgencyTxt: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
 
   caseTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, marginBottom: 8 },
+  statusRow: { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' },
+  statusPill: {
+    backgroundColor: Colors.blueSubtle,
+    color: Colors.blue,
+    fontSize: 10,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  statusCompleted: { backgroundColor: Colors.successSubtle, color: Colors.success },
+  priorityPill: {
+    backgroundColor: Colors.dangerSubtle,
+    color: Colors.danger,
+    fontSize: 10,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  upcomingPill: {
+    backgroundColor: Colors.warningSubtle,
+    color: Colors.warning,
+    fontSize: 10,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
 
   hearingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 5 },
   hearingTxt: { fontSize: 12, color: Colors.textSecondary },
@@ -314,6 +957,19 @@ const s = StyleSheet.create({
   metaLabel: { fontSize: 10, color: Colors.textTertiary, marginBottom: 3 },
   metaValue: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
   metaDivider: { width: 1, height: 28, backgroundColor: Colors.border },
+  progressWrap: { marginBottom: 12 },
+  progressTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: Colors.bgElevated,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: Colors.primary,
+  },
+  progressTxt: { color: Colors.textTertiary, fontSize: 11, marginTop: 6 },
 
   stageTrack: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
   stageSegment: { flexDirection: 'row', alignItems: 'center' },
@@ -338,7 +994,7 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: Colors.borderSubtle, paddingTop: 12,
   },
   lawyerRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  lawyerAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  lawyerAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#2A3342' },
   lawyerInitials: { color: '#fff', fontSize: 12, fontWeight: '800' },
   lawyerName: { fontSize: 12, fontWeight: '600', color: Colors.textPrimary },
   lawyerOnlineRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
@@ -366,4 +1022,136 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 12, marginTop: 4,
   },
   emptyBtnTxt: { color: '#fff', fontSize: 14, fontWeight: '700' },
+});
+
+// ─── New Case Form Styles ─────────────────────────────────────────────────────
+const f = StyleSheet.create({
+  sheetHeader: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingBottom: 14, paddingTop: 4,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle,
+  },
+  sheetTitle: { fontSize: 17, fontWeight: '800', color: Colors.textPrimary },
+  sheetSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  scroll: { flex: 1, minHeight: 0 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 120 },
+
+  label: { fontSize: 11, color: Colors.textTertiary, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 },
+  fieldWrap: { marginBottom: 14 },
+  input: {
+    backgroundColor: Colors.bgElevated, borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: Colors.textPrimary,
+  },
+  inputBox: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  inputBoxPlaceholder: { color: Colors.textTertiary, fontSize: 14 },
+  inputBoxValue: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  segment: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  segmentBtn: {
+    flex: 1,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.bgElevated,
+  },
+  segmentBtnActive: { backgroundColor: Colors.primarySubtle },
+  segmentTxt: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  segmentTxtActive: { color: Colors.primary, fontWeight: '700' },
+  externalWrap: { marginBottom: 12 },
+  assignedTick: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: Colors.successSubtle,
+    marginBottom: 8,
+  },
+  assignedTickTxt: { color: Colors.success, fontSize: 12, fontWeight: '700' },
+  helper: { color: Colors.textSecondary, fontSize: 12, marginBottom: 8 },
+  findBtn: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  findBtnTxt: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600' },
+  recommendWrap: { gap: 8, marginBottom: 12 },
+  recommendCard: {
+    borderRadius: 12,
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+  },
+  recommendCardActive: { borderColor: Colors.primary, backgroundColor: Colors.primarySubtle },
+  recommendName: { color: Colors.textPrimary, fontSize: 13, fontWeight: '700' },
+  recommendMeta: { color: Colors.textSecondary, fontSize: 12, marginTop: 4 },
+  optionRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 8 },
+  optionChip: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  optionChipActive: { borderColor: Colors.primary, backgroundColor: Colors.primarySubtle },
+  optionChipTxt: { color: Colors.textSecondary, fontSize: 12, fontWeight: '600' },
+  optionChipTxtActive: { color: Colors.primary, fontWeight: '700' },
+  errorTxt: { color: Colors.danger, fontSize: 12, marginBottom: 8 },
+  autoFillTxt: { color: Colors.blue, fontSize: 12, marginBottom: 12 },
+
+  catRow: { flexDirection: 'row', gap: 8, paddingBottom: 2 },
+  catChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border,
+  },
+  catChipActive: { backgroundColor: Colors.primarySubtle, borderColor: Colors.primary },
+  catChipTxt: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  catChipTxtActive: { color: Colors.primary },
+  lockedHint: { color: Colors.warning, fontSize: 12, marginTop: -10, marginBottom: 10 },
+
+  urgRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 6 },
+  urgChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border,
+  },
+  urgDot: { width: 7, height: 7, borderRadius: 4 },
+  urgTxt: { fontSize: 12, fontWeight: '500', color: Colors.textSecondary },
+
+  submitWrap: {
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 24,
+  },
+  submitBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: Colors.primary, borderRadius: 14, height: 52,
+    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
+  },
+  submitBtnDim: { opacity: 0.45 },
+  submitTxt: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
 });
