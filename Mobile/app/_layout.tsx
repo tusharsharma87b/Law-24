@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -21,6 +21,12 @@ const StackScreens = () => (
 );
 
 export default function RootLayout() {
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7558/ingest/e2a760d8-9665-4f24-a1b8-077894e54057',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a08cc0'},body:JSON.stringify({sessionId:'a08cc0',runId:'mobile-boot',hypothesisId:'H25',location:'app/_layout.tsx:25',message:'Root layout mounted',data:{platform:Platform.OS},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, []);
+
   if (!IS_WEB) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
