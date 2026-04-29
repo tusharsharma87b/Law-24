@@ -4,25 +4,33 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
-import { mockAIResponse } from '../utils/mockAI';
+import { generateLegalResponse, type LegalResponse } from '../src/services/legalResponseEngine';
+import { DIRECTORY_LAWYERS } from '../constants/lawyersDirectory';
 
-type AiAnalyzeResponse = {
-  featuredAnswer: string;
-  caseTypes: string[];
-  explanation: string;
+type LegacyAiAnalyzeResponse = {
+  featuredAnswer?: string;
+  caseTypes?: string[];
+  explanation?: string;
   solutionSteps?: string[];
-  legalSections: {
+  legalSections?: {
     title: string;
     description: string;
   }[];
-  recommendedLawyers: {
+  recommendedLawyers?: {
     id?: string;
     name: string;
     specialization?: string;
     rating: number;
     city: string;
   }[];
-  relatedSearches: string[];
+  relatedSearches?: string[];
+  title?: string;
+  laws?: { title: string; description: string }[];
+  steps?: string[];
+  timeline?: string;
+  costEstimate?: string;
+  category?: string;
+  subCategory?: string;
 };
 
 export default function SmartLegalSearchScreen() {
@@ -30,14 +38,45 @@ export default function SmartLegalSearchScreen() {
   const params = useLocalSearchParams<{ q?: string; ai?: string }>();
   const query = typeof params.q === 'string' ? params.q : '';
 
-  const ai = useMemo<AiAnalyzeResponse | null>(() => {
+  const ai = useMemo<LegalResponse | null>(() => {
     if (typeof params.ai !== 'string' || !params.ai) return null;
     try {
-      return JSON.parse(params.ai) as AiAnalyzeResponse;
+      const parsed = JSON.parse(params.ai) as LegacyAiAnalyzeResponse;
+      if (typeof parsed?.title === 'string' && typeof parsed?.explanation === 'string') {
+        return {
+          title: parsed.title,
+          explanation: parsed.explanation,
+          laws: parsed.laws ?? parsed.legalSections ?? [],
+          steps: parsed.steps ?? parsed.solutionSteps ?? [],
+          timeline: parsed.timeline ?? 'Timeline depends on court and evidence stage.',
+          costEstimate: parsed.costEstimate ?? 'Estimated after document review.',
+          category: (parsed.category as LegalResponse['category']) ?? 'general',
+          subCategory: parsed.subCategory ?? 'general',
+          caseTypes: parsed.caseTypes ?? [],
+          relatedSearches: parsed.relatedSearches ?? [],
+        };
+      }
+      if (typeof query !== 'string' || !query.trim()) return null;
+      return generateLegalResponse(query);
     } catch {
       return null;
     }
-  }, [params.ai]);
+  }, [params.ai, query]);
+
+  const recommendedLawyers = useMemo(() => {
+    if (!ai) return [];
+    const mapCategory = (cat: LegalResponse['category']) => {
+      switch (cat) {
+        case 'labour': return 'employment';
+        case 'criminal': return 'criminal';
+        case 'family': return 'family';
+        case 'property': return 'property';
+        default: return 'civil';
+      }
+    };
+    const cat = mapCategory(ai.category);
+    return DIRECTORY_LAWYERS.filter((l) => l.category === cat).slice(0, 4);
+  }, [ai]);
 
   if (!ai) {
     return (
@@ -73,7 +112,7 @@ export default function SmartLegalSearchScreen() {
       <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <View style={s.card}>
           <Text style={s.sectionLabel}>Featured Answer</Text>
-          <Text style={s.body}>{ai.featuredAnswer}</Text>
+          <Text style={s.body}>{ai.title}</Text>
         </View>
 
         <View style={s.card}>
@@ -92,10 +131,10 @@ export default function SmartLegalSearchScreen() {
           <Text style={s.body}>{ai.explanation}</Text>
         </View>
 
-        {Array.isArray(ai.solutionSteps) && ai.solutionSteps.length > 0 && (
+        {Array.isArray(ai.steps) && ai.steps.length > 0 && (
           <View style={s.card}>
             <Text style={s.sectionLabel}>What You Should Do (Step-by-step)</Text>
-            {ai.solutionSteps.map((step, idx) => (
+            {ai.steps.map((step, idx) => (
               <View key={`${step}-${idx}`} style={s.stepRow}>
                 <View style={s.stepNumWrap}>
                   <Text style={s.stepNum}>{idx + 1}</Text>
@@ -108,7 +147,7 @@ export default function SmartLegalSearchScreen() {
 
         <View style={s.card}>
           <Text style={s.sectionLabel}>Legal Sections</Text>
-          {ai.legalSections.map((law) => (
+          {ai.laws.map((law) => (
             <View key={law.title} style={s.lawBlock}>
               <Text style={s.lawTitle}>{law.title}</Text>
               <Text style={s.lawDesc}>{law.description}</Text>
@@ -117,8 +156,18 @@ export default function SmartLegalSearchScreen() {
         </View>
 
         <View style={s.card}>
+          <Text style={s.sectionLabel}>Timeline</Text>
+          <Text style={s.body}>{ai.timeline}</Text>
+        </View>
+
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>Cost Estimate</Text>
+          <Text style={s.body}>{ai.costEstimate}</Text>
+        </View>
+
+        <View style={s.card}>
           <Text style={s.sectionLabel}>Recommended Lawyers</Text>
-          {ai.recommendedLawyers.map((lawyer) => (
+          {recommendedLawyers.map((lawyer) => (
             <View key={lawyer.id} style={s.lawyerRow}>
               <View style={{ flex: 1 }}>
                 <Text style={s.lawyerName}>{lawyer.name}</Text>
@@ -128,13 +177,32 @@ export default function SmartLegalSearchScreen() {
               </View>
               <TouchableOpacity
                 style={s.consultBtn}
-                onPress={() => router.push('/(tabs)/lawyers')}
+                onPress={() => router.push({ pathname: '/lawyer/[id]', params: { id: lawyer.id } })}
                 activeOpacity={0.85}
               >
                 <Text style={s.consultTxt}>Consult</Text>
               </TouchableOpacity>
             </View>
           ))}
+        </View>
+
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>Actions</Text>
+          <View style={s.ctaRow}>
+            <TouchableOpacity style={s.ctaBtn} onPress={() => router.push('/(tabs)/cases')} activeOpacity={0.85}>
+              <Text style={s.ctaTxt}>Start Case</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.ctaBtn} onPress={() => router.push('/nyaya-notice')} activeOpacity={0.85}>
+              <Text style={s.ctaTxt}>Generate Notice</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.ctaBtn}
+              onPress={() => router.push({ pathname: '/(tabs)/lawyers', params: { category: ai.category === 'labour' ? 'employment' : ai.category } })}
+              activeOpacity={0.85}
+            >
+              <Text style={s.ctaTxt}>Talk to Lawyer</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={s.card}>
@@ -148,7 +216,7 @@ export default function SmartLegalSearchScreen() {
                   pathname: '/smart-legal-search',
                   params: {
                     q: r,
-                    ai: JSON.stringify(mockAIResponse(r)),
+                    ai: JSON.stringify(generateLegalResponse(r)),
                   },
                 } as any)
               }
@@ -237,6 +305,14 @@ const s = StyleSheet.create({
     paddingVertical: 8,
   },
   consultTxt: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  ctaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  ctaBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  ctaTxt: { color: '#fff', fontSize: 12, fontWeight: '700' },
   relatedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   relatedTxt: { color: Colors.primary, fontSize: 13, fontWeight: '600', flex: 1 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },

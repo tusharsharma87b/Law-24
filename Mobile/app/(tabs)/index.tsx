@@ -24,6 +24,7 @@ import {
 } from '../../constants/lawyerSearchSuggestions';
 import { useLawyerDataStore } from '../../store/useLawyerDataStore';
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
+import { generateLegalResponse } from '../../src/services/legalResponseEngine';
 
 // ─── Category accent colours (for dropdown) ──────────────────────────────────
 const CAT_ACCENT: Partial<Record<string, string>> = {
@@ -173,30 +174,32 @@ export default function HomeScreen() {
 
   const goToNyaya = useCallback(() => {
     closeRouteSheet();
-    router.push({ pathname: '/nyaya', params: { query: selectedSug?.query ?? search } });
+    const q = (selectedSug?.query ?? search).trim();
+    if (!q) return;
+    const legalResponse = generateLegalResponse(q);
+    router.push({
+      pathname: '/smart-legal-search',
+      params: { q, ai: JSON.stringify(legalResponse) },
+    } as any);
   }, [closeRouteSheet, router, selectedSug, search]);
+
+  const handleSmartSearch = useCallback((rawQuery: string) => {
+    const q = rawQuery.trim();
+    if (!q) return;
+    const legalResponse = generateLegalResponse(q);
+    dismissSearch(true);
+    router.push({
+      pathname: '/smart-legal-search',
+      params: { q, ai: JSON.stringify(legalResponse) },
+    } as any);
+  }, [dismissSearch, router]);
 
   // Submit from keyboard — routes directly if intent is clear, otherwise shows sheet
   const handleSearchSubmit = useCallback(() => {
     const q = search.trim();
     if (!q) return;
-    const category = resolveSearchIntent(q);
-    // If we have a direct category match, skip the sheet and go straight to lawyers
-    if (category) {
-      dismissSearch(true);
-      router.push({ pathname: '/(tabs)/lawyers', params: { category } });
-      return;
-    }
-    const synth: SearchSuggestion = {
-      id: 'manual',
-      display: q,
-      query: q,
-      type: 'trending',
-      category: undefined,
-      icon: 'search',
-    };
-    openRouteSheet(synth);
-  }, [search, openRouteSheet, dismissSearch, router]);
+    handleSmartSearch(q);
+  }, [search, handleSmartSearch]);
   // ─────────────────────────────────────────────────────────────────────────
   const sourceLawyers = featuredLawyers ?? MOCK_LAWYERS;
   const liveExperts = sourceLawyers.filter((l) => l.isOnline);
@@ -449,7 +452,7 @@ export default function HomeScreen() {
 
         {/* LEGAL CATEGORIES */}
         <View style={s.section}>
-          <SectionHeader title="Legal Categories" onAction={() => openLawyers()} />
+          <SectionHeader title="Legal Categories" onAction={() => router.push('/legal-categories')} />
           <Animated.FlatList
             data={HOME_LEGAL_CATEGORIES}
             keyExtractor={(item) => item.id}

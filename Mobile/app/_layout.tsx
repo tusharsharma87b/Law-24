@@ -19,6 +19,9 @@ const StackScreens = () => (
     <Stack.Screen name="nyaya" options={{ presentation: 'modal' }} />
     <Stack.Screen name="nyaya-notice" options={{ presentation: 'modal' }} />
     <Stack.Screen name="legal-search" />
+    <Stack.Screen name="legal-categories" />
+    <Stack.Screen name="legal-subcategory/[categoryId]" />
+    <Stack.Screen name="legal-detail/[categoryId]/[subId]" />
     <Stack.Screen name="smart-legal-search" />
     <Stack.Screen name="lawyer/[id]" />
     <Stack.Screen name="payment" />
