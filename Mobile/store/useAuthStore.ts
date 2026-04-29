@@ -61,12 +61,20 @@ export const useAuthStore = create<AuthState>((set) => ({
         return;
       }
 
-      const me = (await apiGet('/auth/me')) as {
+      let me = (await apiGet('/auth/me')) as {
         id: string;
         name?: string | null;
         phone?: string | null;
         email?: string | null;
       } | null;
+      if (!me || typeof me.id !== 'string') {
+        me = (await apiGet('/auth/me')) as {
+          id: string;
+          name?: string | null;
+          phone?: string | null;
+          email?: string | null;
+        } | null;
+      }
       if (!me || typeof me.id !== 'string') {
         await clearAccessToken();
         set({

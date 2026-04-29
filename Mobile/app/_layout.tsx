@@ -20,6 +20,7 @@ const StackScreens = () => (
     <Stack.Screen name="nyaya-notice" options={{ presentation: 'modal' }} />
     <Stack.Screen name="legal-search" />
     <Stack.Screen name="legal-categories" />
+    <Stack.Screen name="categories/[id]" />
     <Stack.Screen name="legal-subcategory/[categoryId]" />
     <Stack.Screen name="legal-detail/[categoryId]/[subId]" />
     <Stack.Screen name="smart-legal-search" />

@@ -7,7 +7,7 @@ const LEGACY_TOKEN_KEY = 'token';
 type UnauthorizedCallback = () => void;
 const unauthorizedListeners = new Set<UnauthorizedCallback>();
 
-/** Call from a root/component once — clears session + navigates away on API 401 (when a token was sent). */
+/** Call from a root/component once; clears session + navigates away on API 401 when a token was sent. */
 export function subscribeUnauthorized(callback: UnauthorizedCallback): () => void {
   unauthorizedListeners.add(callback);
   return () => unauthorizedListeners.delete(callback);
@@ -29,13 +29,18 @@ function normalizeEndpoint(endpoint: string): string {
   return `/api/v1${withSlash}`;
 }
 
+function isPublicOtpEndpoint(normalizedPath: string): boolean {
+  return [
+    '/api/v1/auth/send-otp',
+    '/api/v1/auth/verify-otp',
+    '/api/v1/auth/otp/send',
+    '/api/v1/auth/otp/verify',
+  ].includes(normalizedPath);
+}
+
 function shouldAttachAuth(normalizedPath: string, token: string | null): boolean {
   if (!token || token.length === 0) return false;
-  // OTP and login-ish routes must NOT send a stale Bearer from a prior session — it breaks verify flows on some gateways.
-  if (normalizedPath.includes('/auth/send-otp') || normalizedPath.includes('/auth/verify-otp')) {
-    return false;
-  }
-  return true;
+  return !isPublicOtpEndpoint(normalizedPath);
 }
 
 async function getToken(): Promise<string | null> {
@@ -73,6 +78,10 @@ async function request(method: 'GET' | 'POST', endpoint: string, body?: unknown)
   const path = normalizeEndpoint(endpoint);
   const sendAuth = shouldAttachAuth(path, token);
 
+  if (isPublicOtpEndpoint(path)) {
+    console.log('[Law24 API] OTP request auth header omitted:', !sendAuth);
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: {
@@ -88,7 +97,7 @@ async function request(method: 'GET' | 'POST', endpoint: string, body?: unknown)
     path === '/api/v1/auth/me' ||
     path.endsWith('/auth/me');
 
-  // Stale or invalid JWT: clear storage and optionally notify listeners (logged-in UX).
+  // Stale or invalid JWT: clear storage and optionally notify listeners for logged-in UX.
   if (res.status === 401 && sendAuth && token) {
     await clearAccessToken();
     if (!isAuthMe) {

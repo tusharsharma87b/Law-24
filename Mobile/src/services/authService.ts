@@ -1,9 +1,11 @@
 import { apiGet, apiPost } from './api';
 
 type VerifyOtpResponse = {
+  success?: boolean;
+  verifySuccess?: boolean;
   accessToken?: string;
   token?: string;
-  user: {
+  user?: {
     id: string;
     name: string;
     phone?: string | null;
@@ -27,20 +29,24 @@ type SendOtpResponse = {
 };
 
 export async function sendOtp(target: string, channel: 'phone' | 'email' = 'phone'): Promise<SendOtpResponse> {
-  return apiPost('/auth/send-otp', {
-    target,
+  const data = await apiPost('/auth/send-otp', {
+    target: target.trim(),
     channel,
     purpose: 'login',
   });
+  return data as SendOtpResponse;
 }
 
 export async function verifyOtp(target: string, code: string): Promise<VerifyOtpResponse> {
-  const data = await apiPost('/auth/verify-otp', {
-    target,
-    code,
+  const res = await apiPost('/auth/verify-otp', {
+    target: target.trim(),
+    code: code.trim(),
     purpose: 'login',
   });
-  return data as VerifyOtpResponse;
+
+  console.log('VERIFY OTP RESPONSE:', res);
+
+  return res as VerifyOtpResponse;
 }
 
 export async function getMe() {

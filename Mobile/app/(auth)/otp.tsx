@@ -20,7 +20,7 @@ export default function OtpScreen() {
 
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const [hasError, setHasError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(RESEND_SECONDS);
   const [resendCount, setResendCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -48,18 +48,18 @@ export default function OtpScreen() {
   };
 
   const handleChange = (text: string, idx: number) => {
-    const cleaned = text.replace(/\D/g, '').slice(-1);
+    const cleaned = text.trim().replace(/[^\d]/g, '').slice(-1);
     const next = [...otp];
     next[idx] = cleaned;
     setOtp(next);
-    setHasError(false);
+    setError(null);
 
     if (cleaned && idx < OTP_LENGTH - 1) inputRefs.current[idx + 1]?.focus();
     if (!cleaned && idx > 0) inputRefs.current[idx - 1]?.focus();
 
     // Auto-submit when last digit filled
     if (cleaned && idx === OTP_LENGTH - 1) {
-      const full = [...next.slice(0, OTP_LENGTH - 1), cleaned].join('');
+      const full = [...next.slice(0, OTP_LENGTH - 1), cleaned].join('').trim();
       if (full.length === OTP_LENGTH) handleVerify(full);
     }
   };
@@ -71,18 +71,46 @@ export default function OtpScreen() {
   };
 
   const handleVerify = async (code?: string) => {
-    const fullOtp = code ?? otp.join('');
-    if (fullOtp.length < OTP_LENGTH) { shake(); setHasError(true); return; }
+    const fullOtp = (code ?? otp.join('')).trim();
+    if (fullOtp.length < OTP_LENGTH) { shake(); setError('Enter the 6-digit OTP.'); return; }
+
+    setError(null);
+    setLoading(true);
+    const target = String(value ?? '').trim();
+    console.log('OTP SENT:', fullOtp);
+
+    let result: Awaited<ReturnType<typeof verifyOtp>>;
+    try {
+      result = await verifyOtp(target, fullOtp);
+    } catch (error) {
+      console.error('[Law24 Auth] OTP verification failed:', error);
+      shake();
+      setError('Invalid OTP. Please try again.');
+      setLoading(false);
+      return;
+    }
 
     try {
-      setLoading(true);
-      const target = String(value ?? '');
-      const result = await verifyOtp(target, fullOtp);
+      console.log('VERIFY RESPONSE:', result);
       const accessToken = pickAccessToken(result);
-      if (!accessToken) {
-        throw new Error('Missing access token from server');
+      const isSuccess = Boolean(result?.verifySuccess || result?.success || result?.accessToken || result?.token);
+
+      if (!isSuccess || !accessToken) {
+        console.log('OTP FAILED', result);
+        setError('Invalid OTP. Please try again.');
+        shake();
+        return;
       }
-      const me = result.user;
+
+      console.log('OTP SUCCESS');
+      setError(null);
+
+      const me = result.user ?? {
+        id: target,
+        name: 'Law24 User',
+        phone: type === 'phone' ? target : null,
+        email: type === 'email' ? target : null,
+      };
       const user = {
         id: String(me.id),
         name: me.name ?? 'Law24 User',
@@ -99,9 +127,8 @@ export default function OtpScreen() {
       };
       await useAuthStore.getState().login(user, accessToken);
       router.replace('/(tabs)');
-    } catch {
-      shake();
-      setHasError(true);
+    } catch (error) {
+      console.error('[Law24 Auth] OTP success handling failed:', error);
     } finally {
       setLoading(false);
     }
@@ -116,7 +143,7 @@ export default function OtpScreen() {
       setOtp(Array(OTP_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
     } catch {
-      setHasError(true);
+      setError('Failed to resend OTP. Please try again.');
     }
   };
 
@@ -146,7 +173,7 @@ export default function OtpScreen() {
               style={[
                 styles.otpBox,
                 activeIdx === idx && styles.otpActive,
-                hasError && styles.otpError,
+                error && styles.otpError,
                 digit && styles.otpFilled,
               ]}
               value={digit}
@@ -161,8 +188,8 @@ export default function OtpScreen() {
           ))}
         </Animated.View>
 
-        {hasError && (
-          <Text style={styles.errorText}>Invalid OTP. Please try again.</Text>
+        {error && (
+          <Text style={styles.errorText}>{error}</Text>
         )}
 
         {/* VERIFY CTA */}

@@ -25,12 +25,26 @@ import {
 import { useLawyerDataStore } from '../../store/useLawyerDataStore';
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
 import { generateLegalResponse } from '../../src/services/legalResponseEngine';
+import { LEGAL_SYSTEM } from '../../src/data/legalSystem';
+import { findLegalIntent } from '../../src/utils/searchEngine';
+import { analyzeLegalItem, smartSearchParams } from '../../src/services/smartLegalSearchService';
 
 // ─── Category accent colours (for dropdown) ──────────────────────────────────
 const CAT_ACCENT: Partial<Record<string, string>> = {
   criminal: '#F85149', family: '#FF9F43', property: '#3FB950',
   employment: '#58A6FF', civil: '#F5A623', corporate: '#A78BFA',
   cyber: '#60A5FA', tax: '#34D399',
+};
+
+const SYSTEM_CATEGORY_BY_LAWYER_CATEGORY: Record<string, string> = {
+  criminal: 'criminal-law',
+  family: 'family-law',
+  property: 'property-law',
+  employment: 'labour-law',
+  civil: 'civil-law',
+  corporate: 'corporate-law',
+  consumer: 'consumer-law',
+  cyber: 'cyber-law',
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -176,22 +190,35 @@ export default function HomeScreen() {
     closeRouteSheet();
     const q = (selectedSug?.query ?? search).trim();
     if (!q) return;
+    const match = findLegalIntent(q, LEGAL_SYSTEM);
+    if (match) {
+      analyzeLegalItem(match.item, match.category).then((ai) => {
+        router.push({
+          pathname: '/smart-legal-search',
+          params: smartSearchParams(match.item, match.category, ai),
+        } as any);
+      });
+      return;
+    }
     const legalResponse = generateLegalResponse(q);
-    router.push({
-      pathname: '/smart-legal-search',
-      params: { q, ai: JSON.stringify(legalResponse) },
-    } as any);
+    router.push({ pathname: '/smart-legal-search', params: { q, ai: JSON.stringify(legalResponse) } } as any);
   }, [closeRouteSheet, router, selectedSug, search]);
 
-  const handleSmartSearch = useCallback((rawQuery: string) => {
+  const handleSmartSearch = useCallback(async (rawQuery: string) => {
     const q = rawQuery.trim();
     if (!q) return;
-    const legalResponse = generateLegalResponse(q);
     dismissSearch(true);
-    router.push({
-      pathname: '/smart-legal-search',
-      params: { q, ai: JSON.stringify(legalResponse) },
-    } as any);
+    const match = findLegalIntent(q, LEGAL_SYSTEM);
+    if (match) {
+      const ai = await analyzeLegalItem(match.item, match.category);
+      router.push({
+        pathname: '/smart-legal-search',
+        params: smartSearchParams(match.item, match.category, ai),
+      } as any);
+      return;
+    }
+    const legalResponse = generateLegalResponse(q);
+    router.push({ pathname: '/smart-legal-search', params: { q, ai: JSON.stringify(legalResponse) } } as any);
   }, [dismissSearch, router]);
 
   // Submit from keyboard — routes directly if intent is clear, otherwise shows sheet
@@ -397,13 +424,7 @@ export default function HomeScreen() {
                 style={s.chip}
                 activeOpacity={0.75}
                 onPress={() => {
-                  const category = resolveSearchIntent(chip.label);
-                  if (category) {
-                    dismissSearch(true);
-                    router.push({ pathname: '/(tabs)/lawyers', params: { category } });
-                  } else {
-                    setSearch(chip.label);
-                  }
+                  handleSmartSearch(chip.label);
                 }}
               >
                 <MaterialIcons name={chip.icon as any} size={12} color={Colors.primary} />
@@ -503,7 +524,10 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     style={[s.catCard, { height: categoryCardHeight }]}
                     activeOpacity={0.8}
-                    onPress={() => openLawyers(item.categoryParam)}
+                    onPress={() => {
+                      const categoryId = SYSTEM_CATEGORY_BY_LAWYER_CATEGORY[item.categoryParam] ?? 'civil-law';
+                      router.push({ pathname: '/categories/[id]', params: { id: categoryId } } as any);
+                    }}
                   >
                     <View style={[s.catIcon, { backgroundColor: item.color + '22' }]}>
                       <MaterialIcons name={item.icon as any} size={18} color={item.color} />

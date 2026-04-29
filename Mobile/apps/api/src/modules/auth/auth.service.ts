@@ -22,6 +22,8 @@ const providerLoginSchema = z.object({
   data: z.record(z.unknown()).default({}),
 });
 
+const isDevelopment = () => process.env.NODE_ENV === 'development';
+
 export class AuthService {
   constructor(
     private readonly repo = new AuthRepository(),
@@ -29,11 +31,18 @@ export class AuthService {
   ) {}
 
   async sendOtp(input: unknown) {
-    const data = sendOtpSchema.parse(input);
+    const raw = input as Record<string, unknown>;
+    const data = sendOtpSchema.parse({
+      ...raw,
+      target: String(raw.target ?? '').trim(),
+      channel: String(raw.channel ?? 'phone').trim(),
+      purpose: String(raw.purpose ?? 'login').trim(),
+      name: typeof raw.name === 'string' ? raw.name.trim() : raw.name,
+    });
     const code = `${Math.floor(100000 + Math.random() * 900000)}`;
     await this.repo.createOtp(data.target, code, data.purpose);
     await this.audit.log({ action: 'OTP_SENT', entity: 'auth', metadata: { target: data.target, purpose: data.purpose } });
-    if (process.env.NODE_ENV !== 'production') {
+    if (isDevelopment()) {
       return { success: true, devOtp: code, expiresInSec: 300 };
     }
     return { success: true, expiresInSec: 300 };
@@ -42,17 +51,17 @@ export class AuthService {
   async verifyOtp(input: unknown, meta: { ipAddress?: string; userAgent?: string }) {
     const raw = input as Record<string, unknown>;
     const normalizedInput = {
-      target: String(raw.target ?? raw.phone ?? ''),
-      code: String(raw.code ?? raw.otp ?? ''),
-      purpose: String(raw.purpose ?? 'login'),
+      target: String(raw.target ?? raw.phone ?? '').trim(),
+      code: String(raw.code ?? raw.otp ?? '').trim(),
+      purpose: String(raw.purpose ?? 'login').trim(),
       deviceId: raw.deviceId as string | undefined,
     };
     const data = verifyOtpSchema.parse(normalizedInput);
-    const otp = data.code;
-    const phone = data.target;
-    console.log('VERIFY OTP HIT', { otp });
+    const otp = data.code.trim();
+    const phone = data.target.trim();
+    console.log('VERIFY OTP HIT', { target: data.target, otp, nodeEnv: process.env.NODE_ENV });
 
-    if (otp === '123456') {
+    if (isDevelopment() && otp.trim() === '123456') {
       console.log('DEV OTP BYPASS USED');
 
       const existing = phone.includes('@')
@@ -67,6 +76,14 @@ export class AuthService {
 
       const accessToken = signAccessToken({ sub: user.id, role: user.role as 'USER' | 'LAWYER' | 'ADMIN' });
       const refreshToken = signRefreshToken({ sub: user.id, role: user.role as 'USER' | 'LAWYER' | 'ADMIN' });
+      await this.repo.saveSession({
+        userId: user.id,
+        refreshToken,
+        deviceId: data.deviceId,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      });
+      await this.audit.log({ userId: user.id, action: 'LOGIN_SUCCESS_DEV_OTP', entity: 'auth' });
 
       return {
         success: true,
@@ -82,19 +99,19 @@ export class AuthService {
       };
     }
 
-    const otpRecord = await this.repo.latestOtp(data.target, data.purpose);
-    if (!otpRecord || otpRecord.verifiedAt || otpRecord.expiresAt < new Date() || otpRecord.code !== data.code) {
+    const otpRecord = await this.repo.latestOtp(phone, data.purpose);
+    if (!otpRecord || otpRecord.verifiedAt || otpRecord.expiresAt < new Date() || otpRecord.code.trim() !== otp) {
       throw new Error('Invalid or expired OTP');
     }
     await this.repo.markOtpVerified(otpRecord.id);
 
-    const existing = data.target.includes('@')
-      ? await this.repo.findUserByEmail(data.target)
-      : await this.repo.findUserByPhone(data.target);
+    const existing = phone.includes('@')
+      ? await this.repo.findUserByEmail(phone)
+      : await this.repo.findUserByPhone(phone);
     const user = existing ?? await this.repo.createUser({
-      name: data.target.includes('@') ? 'Law24 User' : `User ${data.target.slice(-4)}`,
-      email: data.target.includes('@') ? data.target : undefined,
-      phone: data.target.includes('@') ? undefined : data.target,
+      name: phone.includes('@') ? 'Law24 User' : `User ${phone.slice(-4)}`,
+      email: phone.includes('@') ? phone : undefined,
+      phone: phone.includes('@') ? undefined : phone,
       role: 'USER',
     });
 
@@ -109,7 +126,18 @@ export class AuthService {
     });
     await this.audit.log({ userId: user.id, action: 'LOGIN_SUCCESS', entity: 'auth' });
 
-    return { accessToken, refreshToken, user: { id: user.id, name: user.name, role: user.role } };
+    return {
+      success: true,
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone ?? null,
+        email: user.email ?? null,
+        role: user.role,
+      },
+    };
   }
 
   async login(

@@ -4,7 +4,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
-import { LEGAL_CATEGORIES } from '../src/data/legalCategories';
+import { LEGAL_SYSTEM } from '../src/data/legalSystem';
+
+const CATEGORY_COLORS: Record<string, string> = {
+  'criminal-law': '#F85149',
+  'family-law': '#FF9F43',
+  'labour-law': '#58A6FF',
+  'property-law': '#3FB950',
+  'civil-law': '#F5A623',
+  'corporate-law': '#A78BFA',
+  'consumer-law': '#22C55E',
+  'cyber-law': '#60A5FA',
+  'legal-services': '#F5A623',
+  'legal-utilities': '#34D399',
+};
 
 export default function LegalCategoriesScreen() {
   const router = useRouter();
@@ -24,20 +37,23 @@ export default function LegalCategoriesScreen() {
         <Text style={s.subTitle}>Explore legal areas and choose the one closest to your issue.</Text>
 
         <View style={s.grid}>
-          {LEGAL_CATEGORIES.map((cat) => (
+          {LEGAL_SYSTEM.map((cat) => {
+            const color = CATEGORY_COLORS[cat.id] ?? Colors.primary;
+            return (
             <TouchableOpacity
               key={cat.id}
-              style={[s.card, { borderColor: cat.color + '40' }]}
-              onPress={() => router.push({ pathname: '/legal-subcategory/[categoryId]', params: { categoryId: cat.id } })}
+              style={[s.card, { borderColor: color + '40' }]}
+              onPress={() => router.push({ pathname: '/categories/[id]', params: { id: cat.id } } as any)}
               activeOpacity={0.88}
             >
-              <View style={[s.iconWrap, { backgroundColor: cat.color + '1A' }]}>
-                <MaterialIcons name={cat.icon as any} size={22} color={cat.color} />
+              <View style={[s.iconWrap, { backgroundColor: color + '1A' }]}>
+                <MaterialIcons name={cat.icon as any} size={22} color={color} />
               </View>
-              <Text style={s.cardTitle}>{cat.category}</Text>
-              <Text style={s.cardMeta}>{cat.subcategories.length} subcategories</Text>
+              <Text style={s.cardTitle}>{cat.title}</Text>
+              <Text style={s.cardMeta}>{cat.items.length} legal topics</Text>
             </TouchableOpacity>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
     </View>

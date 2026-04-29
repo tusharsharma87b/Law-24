@@ -35,8 +35,11 @@ type LegacyAiAnalyzeResponse = {
 
 export default function SmartLegalSearchScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ q?: string; ai?: string }>();
+  const params = useLocalSearchParams<{ q?: string; ai?: string; title?: string; aiPrompt?: string; category?: string }>();
   const query = typeof params.q === 'string' ? params.q : '';
+  const title = typeof params.title === 'string' ? params.title : '';
+  const aiPrompt = typeof params.aiPrompt === 'string' ? params.aiPrompt : '';
+  const categoryTitle = typeof params.category === 'string' ? params.category : '';
 
   const ai = useMemo<LegalResponse | null>(() => {
     if (typeof params.ai !== 'string' || !params.ai) return null;
@@ -56,12 +59,13 @@ export default function SmartLegalSearchScreen() {
           relatedSearches: parsed.relatedSearches ?? [],
         };
       }
-      if (typeof query !== 'string' || !query.trim()) return null;
-      return generateLegalResponse(query);
+      const fallbackQuery = aiPrompt || query || title;
+      if (!fallbackQuery.trim()) return null;
+      return generateLegalResponse(fallbackQuery);
     } catch {
       return null;
     }
-  }, [params.ai, query]);
+  }, [aiPrompt, params.ai, query, title]);
 
   const recommendedLawyers = useMemo(() => {
     if (!ai) return [];
@@ -111,7 +115,7 @@ export default function SmartLegalSearchScreen() {
 
       <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <View style={s.card}>
-          <Text style={s.sectionLabel}>Featured Answer</Text>
+          <Text style={s.sectionLabel}>{categoryTitle ? `${categoryTitle} - Featured Answer` : 'Featured Answer'}</Text>
           <Text style={s.body}>{ai.title}</Text>
         </View>
 
