@@ -6,10 +6,10 @@ import {
   Modal,
   PanResponder,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableWithoutFeedback,
   View,
   type PanResponderInstance,
 } from 'react-native';
@@ -128,9 +128,7 @@ export function BottomSheetWrapper({
     <Modal transparent visible={mounted} animationType="none" onRequestClose={onClose}>
       <View style={styles.root} pointerEvents="box-none">
         <Animated.View style={[StyleSheet.absoluteFillObject, styles.overlay, { opacity: backdrop }]} />
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={StyleSheet.absoluteFillObject} />
-        </TouchableWithoutFeedback>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close sheet" />
         <Animated.View
           style={[
             styles.sheet,
@@ -150,6 +148,7 @@ export function BottomSheetWrapper({
           {enableScroll ? (
             <ScrollView
               showsVerticalScrollIndicator={false}
+              showsHorizontalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
             >

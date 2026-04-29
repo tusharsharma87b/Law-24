@@ -53,6 +53,34 @@ npx expo start
 
 ---
 
+## Run Full Stack With One Command
+
+From the project root (`Law 24`), start backend + mobile together:
+
+```bash
+npm install
+npm run dev
+```
+
+This runs:
+- API: `Mobile/apps/api` on port `4000`
+- Mobile: Expo dev server from `Mobile`
+
+### Optional Root Environment Override
+
+To force a specific API URL for mobile, set:
+
+```bash
+EXPO_PUBLIC_API_URL=http://<YOUR_LOCAL_IP>:4000
+```
+
+If not set, mobile uses dynamic defaults from `Mobile/src/config/api.ts`:
+- Android emulator: `http://10.0.2.2:4000`
+- iOS/simulator/device in Expo: detected LAN host IP
+- fallback: `http://localhost:4000`
+
+---
+
 ## 📁 Project Structure
 
 ```

@@ -57,6 +57,7 @@ export type CaseDocument = {
   id: string;
   name: string;
   type: 'document' | 'audio' | 'video' | 'chat' | 'official' | 'affidavit';
+  folder?: 'Case Documents' | 'Evidence Files' | 'Court Submissions' | 'Personal Uploads' | 'Lawyer Shared';
   subtype?: string;
   format: string;
   caseId: string;

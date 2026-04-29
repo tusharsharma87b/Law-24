@@ -3,12 +3,16 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "expo start",
+    "start": "set EXPO_NO_INTERACTIVE=1 && expo start --clear",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "api:dev": "npm --prefix ./apps/api run dev",
+    "api:build": "npm --prefix ./apps/api run build",
+    "api:prisma:generate": "npm --prefix ./apps/api run prisma:generate",
+    "api:prisma:migrate": "npm --prefix ./apps/api run prisma:migrate"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",

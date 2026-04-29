@@ -1,0 +1,16 @@
+{
+  "name": "law24-workspace",
+  "private": true,
+  "scripts": {
+    "kill:all": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$keep = New-Object System.Collections.Generic.HashSet[int]; $cur = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $PID); while ($cur) { [void]$keep.Add([int]$cur.ProcessId); if (-not $cur.ParentProcessId -or $cur.ParentProcessId -eq 0) { break }; $cur = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $cur.ParentProcessId) -ErrorAction SilentlyContinue }; Get-Process node -ErrorAction SilentlyContinue | Where-Object { -not $keep.Contains([int]$_.Id) } | Stop-Process -Force -ErrorAction SilentlyContinue; Get-NetTCPConnection -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 4000,8081,8082,8083,8084,8085 } | Select-Object -ExpandProperty OwningProcess -Unique | Where-Object { $_ -and -not $keep.Contains([int]$_) } | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }\"",
+    "dev": "npm run kill:all && concurrently -k -n API,MOBILE -c blue,magenta \"npm run dev:api\" \"npm run dev:mobile\"",
+    "kill:api-port": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$conn = Get-NetTCPConnection -LocalPort 4000 -State Listen -ErrorAction SilentlyContinue; if ($conn) { $conn | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; exit 0\"",
+    "dev:api": "npm run kill:api-port && cd Mobile/apps/api && npm run dev",
+    "kill:ports": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ports = 8081,8082; foreach ($p in $ports) { $conns = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue; if ($conns) { $conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } } }; exit 0\"",
+    "dev:mobile": "npm --prefix ./Mobile run start",
+    "dev:mobile:expo": "npm --prefix \"./Mobile\" exec expo start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

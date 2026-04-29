@@ -38,10 +38,12 @@ export function AsyncState({
   loading,
   error,
   success,
+  loadingLabel = 'Saving...',
 }: {
   loading: boolean;
   error?: string | null;
   success?: string | null;
+  loadingLabel?: string;
 }) {
   if (!loading && !error && !success) return null;
   return (
@@ -49,7 +51,7 @@ export function AsyncState({
       {loading && (
         <View style={styles.stateRow}>
           <ActivityIndicator size="small" color={Colors.primary} />
-          <Text style={styles.stateText}>Saving...</Text>
+          <Text style={styles.stateText}>{loadingLabel}</Text>
         </View>
       )}
       {!!error && <Text style={[styles.stateText, { color: Colors.danger }]}>{error}</Text>}
@@ -72,7 +74,7 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1, color: Colors.textPrimary, fontSize: 17, fontWeight: '700', marginLeft: 6 },
   right: { minWidth: 36, alignItems: 'flex-end' },
-  body: { flex: 1, padding: 16 },
+  body: { flex: 1, padding: 16, paddingBottom: 120 },
   card: {
     backgroundColor: Colors.bgSecondary,
     borderRadius: 14,

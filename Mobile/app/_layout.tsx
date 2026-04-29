@@ -13,7 +13,11 @@ const StackScreens = () => (
     <Stack.Screen name="index" />
     <Stack.Screen name="(auth)" />
     <Stack.Screen name="(tabs)" />
+    <Stack.Screen name="profile" />
     <Stack.Screen name="nyaya" options={{ presentation: 'modal' }} />
+    <Stack.Screen name="nyaya-notice" options={{ presentation: 'modal' }} />
+    <Stack.Screen name="legal-search" />
+    <Stack.Screen name="smart-legal-search" />
     <Stack.Screen name="lawyer/[id]" />
     <Stack.Screen name="payment" />
     <Stack.Screen name="case/[id]" />

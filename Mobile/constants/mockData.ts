@@ -242,11 +242,13 @@ export const MOCK_LAWYERS: Lawyer[] = [
 ];
 
 export const MOCK_QUICK_PROMPTS = [
-  { id: '1', label: 'Cheque bounced', prompt: 'The cheque I received has bounced. What are my legal options under Section 138 NI Act?' },
-  { id: '2', label: 'Lost my job', prompt: 'I was terminated without notice or severance pay. What are my rights?' },
-  { id: '3', label: 'Property dispute', prompt: 'My landlord has locked my house without notice. What should I do?' },
-  { id: '4', label: 'Insurance rejected', prompt: 'My insurance claim was rejected without valid reason. Can I take legal action?' },
-  { id: '5', label: 'Cheating / fraud', prompt: 'Someone has cheated me of money in an online transaction. What are my options?' },
+  { id: '1', label: 'Salary not paid', prompt: 'My employer has not paid my salary for the last two months. What can I do under Indian law?' },
+  { id: '2', label: 'Divorce / maintenance', prompt: 'I need maintenance from my spouse and want to know about Section 125 CrPC and divorce process.' },
+  { id: '3', label: 'Property dispute', prompt: 'There is a dispute over ownership of our ancestral land. What laws apply and what steps should I take?' },
+  { id: '4', label: 'Fraud / cheating', prompt: 'Someone cheated me in an online investment scheme. What are my criminal and civil options in India?' },
+  { id: '5', label: 'Tenant not vacating', prompt: 'My tenant is not vacating after lease ended. How do I get possession legally?' },
+  { id: '6', label: 'Consumer complaint', prompt: 'I bought a defective product online and the company refuses refund. What is the Consumer Protection Act remedy?' },
+  { id: '7', label: 'Cheque bounced', prompt: 'The cheque I received has bounced. What are my legal options under Section 138 NI Act?' },
 ];
 
 export const MOCK_AI_RESPONSE = {

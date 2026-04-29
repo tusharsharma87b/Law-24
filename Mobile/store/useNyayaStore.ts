@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { MOCK_AI_RESPONSE } from '../constants/mockData';
+import type { NyayaIntelResponse } from '../constants/nyayaLegalIntelligence';
 
 interface AIMessage {
   id: string;
   role: 'user' | 'ai';
   text: string;
-  response?: typeof MOCK_AI_RESPONSE;
+  response?: NyayaIntelResponse;
   timestamp: Date;
 }
 
@@ -14,7 +14,7 @@ interface NyayaState {
   isLoading: boolean;
   sessionId: string | null;
   addUserMessage: (text: string) => void;
-  addAIResponse: (response: typeof MOCK_AI_RESPONSE) => void;
+  addAIResponse: (response: NyayaIntelResponse) => void;
   setLoading: (val: boolean) => void;
   clearSession: () => void;
 }
@@ -37,7 +37,7 @@ export const useNyayaStore = create<NyayaState>((set) => ({
         {
           id: `ai-${Date.now()}`,
           role: 'ai',
-          text: response.legal_basis,
+          text: response.case_understanding,
           response,
           timestamp: new Date(),
         },

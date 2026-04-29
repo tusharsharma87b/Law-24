@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Switch, ScrollView, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -15,12 +14,6 @@ export default function LoginScreen() {
   const [whatsapp, setWhatsapp] = useState(true);
   const router = useRouter();
   const setWhatsappStore = useAuthStore((s) => s.setWhatsapp);
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7558/ingest/e2a760d8-9665-4f24-a1b8-077894e54057',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a08cc0'},body:JSON.stringify({sessionId:'a08cc0',runId:'mobile-boot',hypothesisId:'H26',location:'app/(auth)/login.tsx:20',message:'Login screen mounted',data:{platform:Platform.OS},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, []);
 
   const validate = () => {
     if (!phone) { setError('Please enter your mobile number'); return false; }

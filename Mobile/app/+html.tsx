@@ -16,8 +16,10 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <ScrollViewStyleReset />
         <style>{`
           html, body, #root { height: 100%; margin: 0; padding: 0; }
-          body { background-color: #050A14; overflow: hidden; }
+          body { background-color: #050A14; overflow: hidden; scrollbar-width: none; -ms-overflow-style: none; }
           * { box-sizing: border-box; }
+          ::-webkit-scrollbar { width: 0px; height: 0px; }
+          ::-webkit-scrollbar-thumb { background: transparent; }
         `}</style>
       </head>
       <body style={{ height: '100%' }}>

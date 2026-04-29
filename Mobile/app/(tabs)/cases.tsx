@@ -10,7 +10,6 @@ import { Colors } from '../../constants/colors';
 import { getCTA, useCaseStore, type NewCaseForm } from '../../store/useCaseStore';
 import { AppIcon, type AppIconName } from '../../components/ui/AppIcon';
 import { getLawyersByCategory, type CategoryLawyer } from '../../constants/categoryLawyers';
-import DateField from '../../components/DateField';
 import { BottomSheetWrapper } from '../../components/ui/BottomSheetWrapper';
 
 const URGENCY: Record<string, { color: string; bg: string; label: string }> = {
@@ -79,7 +78,44 @@ const URGENCY_OPTIONS: { value: NewCaseForm['urgency']; label: string; color: st
 
 const CASE_TYPE_OPTIONS = ['Civil', 'Criminal', 'Family', 'Labour'] as const;
 const COURT_OPTIONS = ['Sessions Court', 'High Court', 'Supreme Court'] as const;
-const CITY_OPTIONS = ['BLR', 'DEL', 'MUM', 'HYD', 'CHE'] as const;
+const INDIA_STATES = [
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+  'Andaman and Nicobar Islands',
+  'Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi',
+  'Jammu and Kashmir',
+  'Ladakh',
+  'Lakshadweep',
+  'Puducherry',
+] as const;
 const FIR_PATTERN = /^[A-Z]{2,}\/[A-Z]{3}\/\d{4}\/\d+$/;
 
 const CATEGORY_TO_LAWYER_MAP: Record<string, string> = {
@@ -102,6 +138,57 @@ function getExperienceYears(seed: string): number {
 
 function dateToISO(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function formatDateInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function isValidDate(dateString: string): boolean {
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) return false;
+  const [day, month, year] = dateString.split('/').map(Number);
+  const date = new Date(year, month - 1, day);
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getDate() === day &&
+    date.getMonth() === month - 1 &&
+    date.getFullYear() === year
+  );
+}
+
+function isFutureDate(dateString: string): boolean {
+  const [day, month, year] = dateString.split('/').map(Number);
+  const inputDate = new Date(year, month - 1, day);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return inputDate > today;
+}
+
+function isTodayOrPast(dateString: string): boolean {
+  const [day, month, year] = dateString.split('/').map(Number);
+  const inputDate = new Date(year, month - 1, day);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return inputDate <= today;
+}
+
+function formatAnyDateToInput(raw: string): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) return trimmed;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  const d = new Date(trimmed);
+  if (Number.isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 type LawyerMode = 'platform' | 'external';
@@ -138,8 +225,10 @@ function NewCaseSheet({
   const [showLawyerList, setShowLawyerList] = useState(false);
   const [selectedLawyer, setSelectedLawyer] = useState<CategoryLawyer | null>(null);
   const [ext, setExt] = useState<ExternalLawyer>({ name: '', phone: '', email: '', firm: '' });
-  const [filedDate, setFiledDate] = useState<Date | null>(null);
-  const [hearingDate, setHearingDate] = useState<Date | null>(null);
+  const [filedDateInput, setFiledDateInput] = useState('');
+  const [hearingDateInput, setHearingDateInput] = useState('');
+  const [stateQuery, setStateQuery] = useState('');
+  const [showStateList, setShowStateList] = useState(false);
 
   const set = (key: keyof NewCaseForm, val: string) =>
     setForm((f) => ({ ...f, [key]: val }));
@@ -155,14 +244,8 @@ function NewCaseSheet({
     if (errors.caseNumber) setErrors((prev) => ({ ...prev, caseNumber: '' }));
     const parts = upper.split('/');
     if (parts.length >= 4) {
-      const cityCode = parts[1];
       const year = parts[2];
-      if ((CITY_OPTIONS as readonly string[]).includes(cityCode)) {
-        setForm((prev) => ({ ...prev, city: cityCode }));
-      }
-      if (/^\d{4}$/.test(year)) {
-        setForm((prev) => ({ ...prev, firYear: year }));
-      }
+      if (/^\d{4}$/.test(year)) setForm((prev) => ({ ...prev, firYear: year }));
     }
   };
 
@@ -172,37 +255,43 @@ function NewCaseSheet({
     set('judge', capitalized);
   };
 
-  const validate = (nextForm: NewCaseForm, external: ExternalLawyer, selectedMode: LawyerMode, filed: Date | null, hearing: Date | null) => {
+  const validate = (nextForm: NewCaseForm, external: ExternalLawyer, selectedMode: LawyerMode, filedText: string, hearingText: string) => {
     const nextErrors: Record<string, string> = {};
-    if (!nextForm.section.trim()) nextErrors.section = 'Section / Act is required';
     if (!nextForm.title.trim()) nextErrors.title = 'Case title is required';
-    if (!nextForm.caseType) nextErrors.caseType = 'Select case type';
-    if (!FIR_PATTERN.test(nextForm.caseNumber)) nextErrors.caseNumber = 'Enter valid FIR format (e.g. DV/BLR/2026/1234)';
-    if (!nextForm.courtName) nextErrors.courtName = 'Select court';
-    if (!nextForm.city) nextErrors.city = 'Select city';
-    if (!filed) nextErrors.filedDate = 'Filed date required';
-    if (!hearing) nextErrors.nextHearing = 'Hearing date required';
-    if (filed && hearing && hearing <= filed) {
-      nextErrors.nextHearing = 'Hearing date must be after filed date';
+    if (!(nextForm.city ?? '').trim()) nextErrors.city = 'Please select state / UT';
+    if (nextForm.caseNumber.trim().length > 0 && !FIR_PATTERN.test(nextForm.caseNumber)) {
+      nextErrors.caseNumber = 'Enter valid FIR format (e.g. DV/BLR/2026/1234)';
+    }
+    if (!filedText.trim()) {
+      nextErrors.filedDate = 'Filed date required';
+    } else if (!isValidDate(filedText)) {
+      nextErrors.filedDate = 'Invalid date format';
+    } else if (!isTodayOrPast(filedText)) {
+      nextErrors.filedDate = 'Filed date can only be past or today';
+    }
+    if (!hearingText.trim()) {
+      nextErrors.nextHearing = 'Hearing date required';
+    } else if (!isValidDate(hearingText)) {
+      nextErrors.nextHearing = 'Invalid date format';
+    } else if (!isFutureDate(hearingText)) {
+      nextErrors.nextHearing = 'Hearing date must be in future';
     }
     if (selectedMode === 'external') {
       if (external.name.trim().length < 3) nextErrors.extName = 'Lawyer name must be at least 3 characters';
       if (!/^\d{10}$/.test(external.phone.replace(/\D/g, ''))) nextErrors.extPhone = 'Enter valid 10-digit phone number';
       if (external.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(external.email.trim())) nextErrors.extEmail = 'Enter valid email';
-    } else if (selectedMode === 'platform' && selectedLawyer && showLawyerList) {
-      // selected lawyer should collapse list for cleaner UX
-      setShowLawyerList(false);
-    }
-    if (selectedMode === 'platform' && !selectedLawyer && showLawyerList === false) {
-      // no hard error (optional assignment), keep optional flow
     }
     return nextErrors;
   };
 
   const isLawyerSet = mode === 'platform' ? !!selectedLawyer : ext.name.trim().length >= 3 && /^\d{10}$/.test(ext.phone.replace(/\D/g, ''));
   const isFormValid = React.useMemo(
-    () => Object.keys(validate(form, ext, mode, filedDate, hearingDate)).length === 0,
-    [form, ext, mode, filedDate, hearingDate, selectedLawyer, showLawyerList]
+    () => Object.keys(validate(form, ext, mode, filedDateInput, hearingDateInput)).length === 0,
+    [form, ext, mode, filedDateInput, hearingDateInput]
+  );
+  const stateOptions = React.useMemo(
+    () => INDIA_STATES.filter((s) => s.toLowerCase().includes(stateQuery.toLowerCase().trim())),
+    [stateQuery],
   );
 
   React.useEffect(() => {
@@ -215,13 +304,6 @@ function NewCaseSheet({
     if (!visible || formMode !== 'edit' || !initialCaseData) return;
     const hearingRaw = initialCaseData.nextHearing || initialCaseData.hearingDate || '';
     const filedRaw = initialCaseData.filedDate || '';
-    const normalizeDate = (raw: string): Date | null => {
-      if (!raw) return null;
-      const d = new Date(raw);
-      if (!Number.isNaN(d.getTime())) return d;
-      const d2 = new Date(`${raw}T00:00:00`);
-      return Number.isNaN(d2.getTime()) ? null : d2;
-    };
     const c = initialCaseData as any;
     setForm({
       category: lockedCategory || c.category || 'matrimonial',
@@ -241,8 +323,8 @@ function NewCaseSheet({
       assignedLawyerName: c.assignedLawyerName || c.lawyer?.name,
       urgency: c.urgency || 'medium',
     });
-    setFiledDate(normalizeDate(filedRaw));
-    setHearingDate(normalizeDate(hearingRaw));
+    setFiledDateInput(formatAnyDateToInput(filedRaw));
+    setHearingDateInput(formatAnyDateToInput(hearingRaw));
     if (c.assignedLawyerName || c.lawyer?.name) {
       setMode('external');
       setExt((prev) => ({
@@ -255,28 +337,29 @@ function NewCaseSheet({
   if (!visible) return <View pointerEvents="none" />;
 
   const handleSubmit = () => {
-    const nextErrors = validate(form, ext, mode, filedDate, hearingDate);
+    const nextErrors = validate(form, ext, mode, filedDateInput, hearingDateInput);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
-    const court = `${form.courtName}, ${form.city}`;
-    const payload = {
-      category: form.category,
-      court: form.courtName,
-      city: form.city,
-      caseNumber: form.caseNumber,
-      filedDate: filedDate ? formatDate(filedDate) : '',
-      hearingDate: hearingDate ? formatDate(hearingDate) : '',
-      urgency: form.urgency,
-      lawyer: mode === 'platform'
-        ? { type: 'platform', lawyerId: selectedLawyer?.id ?? null }
-        : { type: 'external', ...ext },
-    };
+    const safeCity = form.city || 'Delhi';
+    const safeCourtName = form.courtName || 'District Court';
+    const safeCaseType = form.caseType || 'Civil';
+    const safeSection = form.section.trim() || 'General Legal Relief';
+    const autoCaseNumber =
+      form.caseNumber.trim() ||
+      `CASE/${safeCity}/${new Date().getFullYear()}/${String(Date.now()).slice(-4)}`;
+    const court = `${safeCourtName}, ${safeCity}`;
     onSubmit({
       ...form,
+      title: form.title.trim(),
+      section: safeSection,
+      caseType: safeCaseType,
+      caseNumber: autoCaseNumber,
+      courtName: safeCourtName,
+      city: safeCity,
       category: lockedCategory || form.category,
       court,
-      filedDate: filedDate ? formatDate(filedDate) : '',
-      nextHearing: hearingDate ? formatDate(hearingDate) : '',
+      filedDate: filedDateInput,
+      nextHearing: hearingDateInput,
       assignedLawyerId: mode === 'platform' ? selectedLawyer?.id : undefined,
       assignedLawyerName: mode === 'platform' ? selectedLawyer?.name : ext.name.trim() || undefined,
     });
@@ -289,8 +372,8 @@ function NewCaseSheet({
     setSelectedLawyer(null);
     setShowLawyerList(false);
     setExt({ name: '', phone: '', email: '', firm: '' });
-    setFiledDate(null);
-    setHearingDate(null);
+    setFiledDateInput('');
+    setHearingDateInput('');
     setErrors({});
   };
 
@@ -463,43 +546,87 @@ function NewCaseSheet({
             </View>
             {!!errors.courtName && <Text style={f.errorTxt}>{errors.courtName}</Text>}
 
-            <Text style={f.label}>City *</Text>
-            <View style={f.optionRow}>
-              {CITY_OPTIONS.map((opt) => (
-                <TouchableOpacity key={opt} style={[f.optionChip, form.city === opt && f.optionChipActive]} onPress={() => set('city', opt)} activeOpacity={0.85}>
-                  <Text style={[f.optionChipTxt, form.city === opt && f.optionChipTxtActive]}>{opt}</Text>
-                </TouchableOpacity>
-              ))}
+            <Text style={f.label}>State / UT *</Text>
+            <View style={f.fieldWrap}>
+              <TouchableOpacity
+                style={f.inputBox}
+                onPress={() => setShowStateList((v) => !v)}
+                activeOpacity={0.85}
+              >
+                <Text style={form.city ? f.inputBoxValue : f.inputBoxPlaceholder}>
+                  {form.city || 'Select state / UT'}
+                </Text>
+                <AppIcon name="forward" size={16} color={Colors.textTertiary} />
+              </TouchableOpacity>
+              {showStateList && (
+                <View style={f.statePickerWrap}>
+                  <TextInput
+                    style={f.input}
+                    value={stateQuery}
+                    onChangeText={setStateQuery}
+                    placeholder="Search state / UT"
+                    placeholderTextColor={Colors.textTertiary}
+                    autoCapitalize="words"
+                  />
+                  <ScrollView
+                    style={f.stateList}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {stateOptions.map((name) => (
+                      <TouchableOpacity
+                        key={name}
+                        style={[f.stateRow, form.city === name && f.stateRowActive]}
+                        onPress={() => {
+                          set('city', name);
+                          setShowStateList(false);
+                          setStateQuery('');
+                          if (errors.city) setErrors((prev) => ({ ...prev, city: '' }));
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={[f.stateTxt, form.city === name && f.stateTxtActive]}>{name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {stateOptions.length === 0 && <Text style={f.noStateTxt}>No matches</Text>}
+                  </ScrollView>
+                </View>
+              )}
             </View>
             {!!errors.city && <Text style={f.errorTxt}>{errors.city}</Text>}
 
-            {!!form.firYear && <Text style={f.autoFillTxt}>Auto-filled from FIR: Year {form.firYear}, City {form.city}</Text>}
+            {!!form.firYear && <Text style={f.autoFillTxt}>Auto-filled from FIR: Year {form.firYear}</Text>}
 
             <FormInput label="Presiding Judge (Optional)" value={form.judge} placeholder="e.g. Hon. Justice R. Kumar" onChangeText={setJudge} />
             <FormInput label="Notes (Optional)" value={form.notes ?? ''} placeholder="Add brief notes for this case" onChangeText={(v) => set('notes', v)} />
 
-            <DateField
-              label="Filed Date *"
-              value={filedDate ? dateToISO(filedDate) : ''}
-              maximumDate={dateToISO(new Date())}
-              onChange={(iso) => {
-                const selected = new Date(`${iso}T00:00:00`);
-                setFiledDate(selected);
-                if (hearingDate && hearingDate <= selected) setHearingDate(null);
+            <Text style={f.label}>Filed Date *</Text>
+            <TextInput
+              style={[f.input, !!errors.filedDate && f.inputError]}
+              value={filedDateInput}
+              onChangeText={(v) => {
+                setFiledDateInput(formatDateInput(v));
                 if (errors.filedDate) setErrors((prev) => ({ ...prev, filedDate: '' }));
               }}
+              placeholder="DD/MM/YYYY"
+              placeholderTextColor={Colors.textTertiary}
+              keyboardType="number-pad"
+              maxLength={10}
             />
             {!!errors.filedDate && <Text style={f.errorTxt}>{errors.filedDate}</Text>}
 
-            <DateField
-              label="Next Hearing Date *"
-              value={hearingDate ? dateToISO(hearingDate) : ''}
-              minimumDate={filedDate ? dateToISO(new Date(filedDate.getTime() + 24 * 60 * 60 * 1000)) : dateToISO(new Date())}
-              onChange={(iso) => {
-                const selected = new Date(`${iso}T00:00:00`);
-                setHearingDate(selected);
+            <Text style={f.label}>Next Hearing Date *</Text>
+            <TextInput
+              style={[f.input, !!errors.nextHearing && f.inputError]}
+              value={hearingDateInput}
+              onChangeText={(v) => {
+                setHearingDateInput(formatDateInput(v));
                 if (errors.nextHearing) setErrors((prev) => ({ ...prev, nextHearing: '' }));
               }}
+              placeholder="DD/MM/YYYY"
+              placeholderTextColor={Colors.textTertiary}
+              keyboardType="number-pad"
+              maxLength={10}
             />
             {!!errors.nextHearing && <Text style={f.errorTxt}>{errors.nextHearing}</Text>}
 
@@ -526,7 +653,6 @@ function NewCaseSheet({
               style={[f.submitBtn, !isFormValid && f.submitBtnDim]}
               onPress={handleSubmit}
               activeOpacity={0.88}
-              disabled={!isFormValid}
             >
               <AppIcon name="plus" size={18} color="#fff" />
               <Text style={f.submitTxt}>{formMode === 'edit' ? 'Save Changes' : 'Create Case'}</Text>
@@ -1044,6 +1170,7 @@ const f = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 14, color: Colors.textPrimary,
   },
+  inputError: { borderColor: Colors.danger },
   inputBox: {
     backgroundColor: Colors.bgElevated,
     borderRadius: 12,
@@ -1108,6 +1235,31 @@ const f = StyleSheet.create({
   recommendCardActive: { borderColor: Colors.primary, backgroundColor: Colors.primarySubtle },
   recommendName: { color: Colors.textPrimary, fontSize: 13, fontWeight: '700' },
   recommendMeta: { color: Colors.textSecondary, fontSize: 12, marginTop: 4 },
+  statePickerWrap: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    backgroundColor: Colors.bgElevated,
+    padding: 10,
+    marginBottom: 10,
+    gap: 8,
+  },
+  stateList: { maxHeight: 220 },
+  stateRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    marginBottom: 6,
+  },
+  stateRowActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primarySubtle,
+  },
+  stateTxt: { color: Colors.textPrimary, fontSize: 13 },
+  stateTxtActive: { color: Colors.primary, fontWeight: '700' },
+  noStateTxt: { color: Colors.textSecondary, fontSize: 12, textAlign: 'center', paddingVertical: 12 },
   optionRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 8 },
   optionChip: {
     borderRadius: 20,
@@ -1154,4 +1306,15 @@ const f = StyleSheet.create({
   },
   submitBtnDim: { opacity: 0.45 },
   submitTxt: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
+  dateDoneBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 10,
+    backgroundColor: Colors.primarySubtle,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  dateDoneTxt: { color: Colors.primary, fontSize: 13, fontWeight: '700' },
 });

@@ -86,7 +86,8 @@ export function FloatingFAB() {
   // disable FAB interactions on case forms/details so it never steals vertical scroll touches.
   const disableFabForCaseFlows =
     pathname?.includes('/(tabs)/cases') ||
-    pathname?.includes('/case/');
+    pathname?.includes('/case/') ||
+    pathname?.includes('/profile');
 
   const toggleMenu = () => {
     setOpenEmergency(false);

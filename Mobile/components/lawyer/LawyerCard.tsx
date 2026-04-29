@@ -67,20 +67,22 @@ export function LawyerCard({ data, onPress, ctaLabel = 'Talk Now' }: Props) {
   return (
     <View style={styles.shadowContainer}>
       <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
-        {data.isOnline ? (
-          <View style={styles.onlineBadge}>
-            <Text style={styles.onlineText}>Online</Text>
-          </View>
-        ) : null}
-
         <View style={styles.content}>
           <View style={styles.topRow}>
             <View style={styles.avatarContainer}>
               <Text style={styles.avatarText}>{data.initials}</Text>
             </View>
+            <View style={styles.nameStatusRow}>
+              <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
+                {data.name}
+              </Text>
+              <View style={[styles.onlineBadge, !data.isOnline && styles.offlineBadge]}>
+                <Text style={[styles.onlineText, !data.isOnline && styles.offlineText]}>
+                  {data.isOnline ? 'Online' : 'Offline'}
+                </Text>
+              </View>
+            </View>
           </View>
-
-          <Text style={styles.name} numberOfLines={1}>{data.name}</Text>
           <Text style={styles.cityCourt} numberOfLines={1}>{data.city} • {data.courtLabel}</Text>
           <Text style={styles.spec} numberOfLines={1}>{data.specialization}</Text>
           <Text style={styles.respond}>Responds in {respondMins} mins</Text>
@@ -121,7 +123,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   content: { gap: 0 },
-  topRow: { flexDirection: 'row', alignItems: 'center' },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   avatarContainer: {
     width: 52,
     height: 52,
@@ -135,10 +137,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
+  nameStatusRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   onlineBadge: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -147,22 +152,32 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(34,197,94,0.10)',
     borderWidth: 1,
     borderColor: 'rgba(34,197,94,0.25)',
+    marginLeft: SPACING.sm,
+    flexShrink: 0,
+  },
+  offlineBadge: {
+    backgroundColor: 'rgba(107,114,128,0.14)',
+    borderColor: 'rgba(107,114,128,0.25)',
   },
   onlineText: {
     color: '#22C55E',
     fontSize: 12,
     fontWeight: '500',
   },
+  offlineText: {
+    color: '#9CA3AF',
+  },
   name: {
+    flex: 1,
+    minWidth: 0,
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    marginTop: SPACING.md,
   },
   cityCourt: {
     fontSize: 13,
     color: '#9CA3AF',
-    marginTop: SPACING.xs,
+    marginTop: SPACING.sm,
   },
   spec: {
     color: '#9CA3AF',

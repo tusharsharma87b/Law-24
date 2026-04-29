@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Animated, Alert, useWindowDimensions, Dimensions, Platform, Keyboard,
+  TextInput, Animated, Alert, useWindowDimensions, Dimensions, Platform, Keyboard, ActivityIndicator,
   BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { MOCK_LAWYERS } from '../../constants/mockData';
 import { DIRECTORY_LAWYERS } from '../../constants/lawyersDirectory';
 import { useAuthStore } from '../../store/useAuthStore';
 import { SectionHeader } from '../../components/ui/SectionHeader';
-import { resolveSearchIntent, SEARCH_PLACEHOLDERS } from '../../constants/searchIntentMap';
+import { SEARCH_PLACEHOLDERS } from '../../constants/searchIntentMap';
 import { NotificationSheet } from '../../components/notifications/NotificationSheet';
 import { useUnreadCount } from '../../store/useNotificationStore';
 import { useWalletStore } from '../../store/useWalletStore';
@@ -24,6 +24,7 @@ import {
 } from '../../constants/lawyerSearchSuggestions';
 import { useLawyerDataStore } from '../../store/useLawyerDataStore';
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
+import { mockAIResponse } from '../../utils/mockAI';
 
 // ─── Category accent colours (for dropdown) ──────────────────────────────────
 const CAT_ACCENT: Partial<Record<string, string>> = {
@@ -110,6 +111,7 @@ export default function HomeScreen() {
   // ── Smart Search ─────────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [fixedTopH, setFixedTopH] = useState(110);
   const sugTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -159,61 +161,45 @@ export default function HomeScreen() {
     if (clearInput) setSearch('');
   }, []);
 
-  // ── Route-choice sheet ──────────────────────────────────────────────────
-  const [selectedSug, setSelectedSug] = useState<SearchSuggestion | null>(null);
-  const [routeSheetMounted, setRouteSheetMounted] = useState(false);
-  const routeSheetAnim = useRef(new Animated.Value(0)).current;
+  const handleLegalQuery = useCallback(
+    async (raw: string) => {
+      const query = raw.trim();
+      if (!query) return;
 
-  const openRouteSheet = useCallback((sug: SearchSuggestion) => {
-    // Immediately dismiss keyboard + clear input — Google-like UX
-    Keyboard.dismiss();
-    setSearchFocused(false);
-    setSearch('');
-    setSelectedSug(sug);
-    setRouteSheetMounted(true);
-    routeSheetAnim.setValue(0);
-    Animated.spring(routeSheetAnim, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 3 }).start();
-  }, [routeSheetAnim]);
+      console.log('QUERY:', query);
+      Keyboard.dismiss();
+      setSearchFocused(false);
+      setIsAnalyzing(true);
 
-  const closeRouteSheet = useCallback(() => {
-    Animated.timing(routeSheetAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(({ finished }) => {
-      if (finished) { setRouteSheetMounted(false); setSelectedSug(null); }
-    });
-  }, [routeSheetAnim]);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        // Mock-only mode: no backend dependency for search/chips AI flow.
+        const data = mockAIResponse(query);
+        console.log('AI RESPONSE:', data);
 
-  const goToLawyers = useCallback(() => {
-    closeRouteSheet();
-    const cat = selectedSug?.category ?? resolveSearchIntent(search);
-    if (cat) router.push({ pathname: '/(tabs)/lawyers', params: { category: cat } });
-    else router.push('/(tabs)/lawyers');
-  }, [closeRouteSheet, router, selectedSug, search]);
+        setSearch('');
+        router.push({
+          pathname: '/smart-legal-search',
+          params: {
+            q: query,
+            ai: JSON.stringify(data),
+          },
+        } as any);
+      } catch (error) {
+        console.log('AI RESPONSE:', error);
+        Alert.alert('No results found', 'No results found. Try a different query.');
+      } finally {
+        setIsAnalyzing(false);
+      }
+    },
+    [router],
+  );
 
-  const goToNyaya = useCallback(() => {
-    closeRouteSheet();
-    router.push({ pathname: '/nyaya', params: { query: selectedSug?.query ?? search } });
-  }, [closeRouteSheet, router, selectedSug, search]);
-
-  // Submit from keyboard — routes directly if intent is clear, otherwise shows sheet
   const handleSearchSubmit = useCallback(() => {
     const q = search.trim();
     if (!q) return;
-    const category = resolveSearchIntent(q);
-    // If we have a direct category match, skip the sheet and go straight to lawyers
-    if (category) {
-      dismissSearch(true);
-      router.push({ pathname: '/(tabs)/lawyers', params: { category } });
-      return;
-    }
-    const synth: SearchSuggestion = {
-      id: 'manual',
-      display: q,
-      query: q,
-      type: 'trending',
-      category: undefined,
-      icon: 'search',
-    };
-    openRouteSheet(synth);
-  }, [search, openRouteSheet, dismissSearch, router]);
+    handleLegalQuery(q);
+  }, [search, handleLegalQuery]);
   // ─────────────────────────────────────────────────────────────────────────
   const sourceLawyers = featuredLawyers ?? MOCK_LAWYERS;
   const liveExperts = sourceLawyers.filter((l) => l.isOnline).slice(0, 3);
@@ -284,7 +270,9 @@ export default function HomeScreen() {
 
         {/* Search bar */}
         <View style={[s.searchRow, searchFocused && s.searchRowFocused]}>
-          <MaterialIcons name="search" size={18} color={searchFocused ? Colors.primary : Colors.textTertiary} />
+          <TouchableOpacity onPress={handleSearchSubmit} hitSlop={8}>
+            <MaterialIcons name="search" size={18} color={searchFocused ? Colors.primary : Colors.textTertiary} />
+          </TouchableOpacity>
           <View style={s.searchInputWrap}>
             {search.length === 0 && !searchFocused && (
               <Animated.Text style={[s.searchPlaceholder, { opacity: placeholderFade }]} numberOfLines={1}>
@@ -312,9 +300,14 @@ export default function HomeScreen() {
             />
           </View>
           {search.length > 0 ? (
-            <TouchableOpacity onPress={() => { setSearch(''); setSearchFocused(false); }} hitSlop={10}>
-              <MaterialIcons name="close" size={16} color="#6B7280" />
-            </TouchableOpacity>
+            <View style={s.searchActions}>
+              <TouchableOpacity onPress={() => { setSearch(''); setSearchFocused(false); }} hitSlop={10}>
+                <MaterialIcons name="close" size={16} color="#6B7280" />
+              </TouchableOpacity>
+              <TouchableOpacity style={s.goBtn} onPress={handleSearchSubmit} activeOpacity={0.85}>
+                <Text style={s.goBtnTxt}>Go</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <TouchableOpacity
               style={s.micBtn}
@@ -345,15 +338,7 @@ export default function HomeScreen() {
                 key={chip.label}
                 style={s.chip}
                 activeOpacity={0.75}
-                onPress={() => {
-                  const category = resolveSearchIntent(chip.label);
-                  if (category) {
-                    dismissSearch(true);
-                    router.push({ pathname: '/(tabs)/lawyers', params: { category } });
-                  } else {
-                    setSearch(chip.label);
-                  }
-                }}
+                onPress={() => handleLegalQuery(chip.label)}
               >
                 <MaterialIcons name={chip.icon as any} size={12} color={Colors.primary} />
                 <Text style={s.chipTxt}>{chip.label}</Text>
@@ -694,7 +679,10 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={sug.id}
                 style={[s.dropRow, idx < suggestions.length - 1 && s.dropRowBorder]}
-                onPress={() => openRouteSheet(sug)}
+                onPress={() => {
+                  setSearch(sug.query || sug.display);
+                  setSearchFocused(false);
+                }}
                 activeOpacity={0.75}
               >
                 {/* Icon */}
@@ -722,70 +710,20 @@ export default function HomeScreen() {
         </Animated.View>
       )}
 
-      {/* ── Route-choice sheet (lawyer vs AI) ── */}
-      {routeSheetMounted && selectedSug && (() => {
-        const accent = selectedSug.category ? (CAT_ACCENT[selectedSug.category] ?? '#4F6BFF') : '#4F6BFF';
-        const sheetTranslate = routeSheetAnim.interpolate({ inputRange: [0, 1], outputRange: [300, 0] });
-        const backdropOpacity = routeSheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.55] });
-        return (
-          <>
-            <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: backdropOpacity }]} pointerEvents="auto">
-              <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeRouteSheet} activeOpacity={1} />
-            </Animated.View>
-            <Animated.View style={[s.routeSheet, { transform: [{ translateY: sheetTranslate }] }]}>
-              <View style={s.routeHandle} />
-
-              {/* Query display */}
-              <View style={[s.routeQueryRow, { borderLeftColor: accent }]}>
-                <View style={[s.routeQueryIcon, { backgroundColor: accent + '22' }]}>
-                  <MaterialIcons name={selectedSug.icon as any} size={16} color={accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.routeQueryText} numberOfLines={1}>{selectedSug.display}</Text>
-                  {selectedSug.sub ? <Text style={s.routeQuerySub}>{selectedSug.sub}</Text> : null}
-                </View>
-                <TouchableOpacity onPress={closeRouteSheet} hitSlop={12}>
-                  <MaterialIcons name="close" size={18} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={s.routeChoiceLabel}>HOW WOULD YOU LIKE TO PROCEED?</Text>
-
-              {/* Option 1: Talk to a Lawyer */}
-              <TouchableOpacity style={s.routeCard} onPress={goToLawyers} activeOpacity={0.85}>
-                <View style={[s.routeCardIcon, { backgroundColor: '#4F6BFF22' }]}>
-                  <MaterialIcons name="people" size={22} color="#4F6BFF" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.routeCardTitle}>Talk to a Lawyer</Text>
-                  <Text style={s.routeCardSub}>
-                    Find {selectedSug.category ?? 'a'} lawyer · Browse experts
-                  </Text>
-                </View>
-                <MaterialIcons name="arrow-forward-ios" size={14} color="#6B7280" />
-              </TouchableOpacity>
-
-              {/* Option 2: Ask NyayaAI */}
-              <TouchableOpacity style={[s.routeCard, s.routeCardAI]} onPress={goToNyaya} activeOpacity={0.85}>
-                <View style={[s.routeCardIcon, { backgroundColor: Colors.goldSubtle }]}>
-                  <MaterialIcons name="auto-awesome" size={22} color={Colors.gold} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.routeCardTitle}>Ask NyayaAI</Text>
-                  <Text style={s.routeCardSub}>Instant guidance · Indian Law · IPC sections</Text>
-                </View>
-                <MaterialIcons name="arrow-forward-ios" size={14} color="#6B7280" />
-              </TouchableOpacity>
-            </Animated.View>
-          </>
-        );
-      })()}
-
       {/* ── Notification Sheet ── */}
       <NotificationSheet
         visible={notifSheetOpen}
         onClose={() => setNotifSheetOpen(false)}
       />
+
+      {isAnalyzing && (
+        <View style={s.loadingOverlay}>
+          <View style={s.loadingCard}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={s.loadingText}>Analyzing legal query...</Text>
+          </View>
+        </View>
+      )}
 
     </View>
   );
@@ -834,6 +772,14 @@ const s = StyleSheet.create({
   } as any,
   searchInput: { flex: 1, color: Colors.textPrimary, fontSize: 13, paddingVertical: 0 },
   micBtn: { padding: 2 },
+  searchActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  goBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  goBtnTxt: { color: '#fff', fontSize: 11, fontWeight: '700' },
 
   chips: { marginTop: 10 },
   chipsContent: { gap: 8, flexDirection: 'row' },
@@ -876,36 +822,6 @@ const s = StyleSheet.create({
   },
   dropCatTxt: { fontSize: 10, fontWeight: '700', textTransform: 'capitalize' },
 
-  // Route-choice sheet
-  routeSheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: Colors.bgSecondary,
-    borderTopLeftRadius: 22, borderTopRightRadius: 22,
-    paddingHorizontal: 16, paddingBottom: Platform.OS === 'ios' ? 36 : 20,
-    borderTopWidth: 1, borderTopColor: Colors.border,
-    zIndex: 50, elevation: 40,
-  },
-  routeHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginTop: 10, marginBottom: 10 },
-  routeQueryRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderLeftWidth: 3, paddingLeft: 10,
-    backgroundColor: Colors.bgElevated, borderRadius: 10,
-    padding: 10, marginBottom: 14,
-  },
-  routeQueryIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  routeQueryText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
-  routeQuerySub: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
-  routeChoiceLabel: { fontSize: 10, color: Colors.textTertiary, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 },
-  routeCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: Colors.bgElevated, borderRadius: 14,
-    padding: 14, marginBottom: 10,
-    borderWidth: 1, borderColor: Colors.border,
-  },
-  routeCardAI: { borderColor: Colors.goldSubtle, backgroundColor: 'rgba(245,166,35,0.05)' },
-  routeCardIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  routeCardTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  routeCardSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   aiCard: {
     borderRadius: 20, padding: 18, borderWidth: 1,
     borderColor: Colors.goldSubtle, marginBottom: 20,
@@ -951,4 +867,27 @@ const s = StyleSheet.create({
   expertCard:{ alignItems: 'stretch', overflow: 'visible' },
   topCard:{ alignItems: 'stretch', overflow: 'visible' },
   cardWrapper: { marginRight: 14, padding: 6, paddingBottom: 8 },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 400,
+  },
+  loadingCard: {
+    width: 220,
+    borderRadius: 14,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 18,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    color: Colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });
