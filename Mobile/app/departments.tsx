@@ -60,7 +60,7 @@ export default function DepartmentsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
         <Text style={s.intro}>
-          Select a department that matches your situation. You don't need to know legal terms — just pick the closest topic.
+          Select a department that matches your situation. You do not need to know legal terms - just pick the closest topic.
         </Text>
 
         <View style={s.grid}>

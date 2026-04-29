@@ -1,0 +1,24 @@
+---
+description: Protect restored Law24 frontend UI from accidental overwrite
+globs:
+  - Mobile/app/**/*.tsx
+  - Mobile/components/**/*.tsx
+alwaysApply: true
+---
+
+# Law24 UI Protection Rule
+
+Do not replace or simplify restored UI layout/components in `Mobile/app` and `Mobile/components`.
+
+Allowed changes:
+- Connect existing UI to APIs
+- Add loading/empty/error handling
+- Minor bug fixes that preserve visual layout
+
+Not allowed without explicit user confirmation:
+- Replacing screens with placeholders
+- Removing sections/cards/chips from existing UI
+- Deleting UI files
+- Rewriting screen structure or navigation shell
+
+When a task requests stability fixes, preserve UI and apply minimal targeted patches.

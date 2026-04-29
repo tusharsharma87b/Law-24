@@ -10,7 +10,8 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
     return;
   }
   try {
-    const payload = verifyAccessToken(auth.slice(7));
+    const token = auth.slice(7);
+    const payload = verifyAccessToken(token);
     req.user = { id: payload.sub, role: payload.role };
     next();
   } catch {

@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthUnauthorizedSync } from './auth-unauthorized-sync';
+import { BASE_URL } from '../src/config/api';
 
 const IS_WEB = Platform.OS === 'web';
 const MOBILE_MAX_WIDTH = 430;
@@ -25,10 +27,15 @@ const StackScreens = () => (
 );
 
 export default function RootLayout() {
+  useEffect(() => {
+    console.log('[Law24] API BASE_URL:', BASE_URL);
+  }, []);
+
   if (!IS_WEB) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
+          <AuthUnauthorizedSync />
           <StatusBar style="light" backgroundColor="#0D1117" />
           <StackScreens />
         </SafeAreaProvider>
@@ -39,6 +46,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#050A14' }}>
       <SafeAreaProvider>
+        <AuthUnauthorizedSync />
         <StatusBar style="light" backgroundColor="#0D1117" />
         <View style={styles.webOuter}>
           <View style={styles.webPhone}>

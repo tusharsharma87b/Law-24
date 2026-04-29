@@ -3,7 +3,6 @@ import {
   Alert,
   Animated,
   Dimensions,
-  FlatList,
   KeyboardAvoidingView,
   Modal as RNModal,
   PanResponder,
@@ -413,7 +412,6 @@ function ReviewList({
   reviews: Review[];
 }) {
   const [filter, setFilter] = useState<(typeof REVIEW_FILTERS)[number]>('All');
-  const [visibleCount, setVisibleCount] = useState(6);
 
   const filtered = useMemo(() => {
     let list = reviews;
@@ -421,12 +419,8 @@ function ReviewList({
     if (filter === 'Criminal') list = list.filter((r) => r.caseType.toLowerCase().includes('criminal'));
     if (filter === 'Recent') list = [...list].reverse();
     if (filter === 'Top Rated') list = [...list].sort((a, b) => b.rating - a.rating);
-    return list.slice(0, visibleCount);
-  }, [filter, reviews, visibleCount]);
-
-  const loadMore = useCallback(() => {
-    setVisibleCount((c) => Math.min(c + 4, reviews.length));
-  }, [reviews.length]);
+    return list.slice(0, 6);
+  }, [filter, reviews]);
 
   const renderItem = useCallback(({ item }: { item: Review }) => (
     <View style={s.reviewItem}>
@@ -734,11 +728,8 @@ export default function LawyerProfileScreen() {
 
   const normalizedId = Array.isArray(params.id) ? params.id[0] : params.id;
   const raw = MOCK_LAWYERS.find((l) => l.id === normalizedId);
-  if (!raw) {
-    return <EmptyState message="No lawyer data available for this profile." />;
-  }
-  const lawyer = useMemo(() => normalizeLawyer(raw), [raw]);
-  const [reviews, setReviews] = useState<Review[]>(() => normalizeReviews(lawyer));
+  const lawyer = useMemo(() => (raw ? normalizeLawyer(raw) : null), [raw]);
+  const [reviews, setReviews] = useState<Review[]>([]);
 
   const favorableRate = useMemo(() => {
     const favorable = reviews.filter((r) => r.outcome === 'WON' || r.outcome === 'SETTLED').length;
@@ -746,8 +737,14 @@ export default function LawyerProfileScreen() {
   }, [reviews]);
 
   const rankScore = useMemo(() => {
+    if (!lawyer) return 0;
     return computeRankScore(lawyer, userCaseType);
   }, [lawyer, userCaseType]);
+
+  useEffect(() => {
+    if (!lawyer) return;
+    setReviews(normalizeReviews(lawyer));
+  }, [lawyer]);
 
   const handleFeedbackSubmit = useCallback((payload: FeedbackPayload) => {
     setReviews((prev) => [
@@ -846,6 +843,10 @@ export default function LawyerProfileScreen() {
       }).start();
     }
   }, [bookingTranslateY, showBooking]);
+
+  if (!lawyer) {
+    return <EmptyState message="No lawyer data available for this profile." />;
+  }
 
   return (
     <BottomSheetModalProvider>

@@ -7,10 +7,15 @@
     "kill:api-port": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$conn = Get-NetTCPConnection -LocalPort 4000 -State Listen -ErrorAction SilentlyContinue; if ($conn) { $conn | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }; exit 0\"",
     "dev:api": "npm run kill:api-port && cd Mobile/apps/api && npm run dev",
     "kill:ports": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ports = 8081,8082; foreach ($p in $ports) { $conns = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue; if ($conns) { $conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } } }; exit 0\"",
-    "dev:mobile": "npm --prefix ./Mobile run start",
+    "dev:mobile": "npm run kill:ports && npm --prefix ./Mobile run start",
     "dev:mobile:expo": "npm --prefix \"./Mobile\" exec expo start"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "@types/react": "~19.2.10",
+    "concurrently": "^9.2.1",
+    "typescript": "~5.9.2"
+  },
+  "dependencies": {
+    "expo": "^55.0.18"
   }
 }

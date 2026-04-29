@@ -49,7 +49,7 @@ export default function CaseHistoryScreen() {
       map[k].push(e);
     });
     return Object.entries(map);
-  }, [active]);
+  }, [active, id]);
 
   return (
     <View style={s.root}>

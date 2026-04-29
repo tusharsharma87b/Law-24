@@ -18,18 +18,6 @@ import { AppIcon } from './AppIcon';
 const OFFICE_EMERGENCY_NUMBER = '+919999999999';
 type UrgencyType = 'urgent' | 'not urgent';
 type CategoryType = 'Criminal' | 'Family' | 'General';
-type EmergencyLead = {
-  type: UrgencyType;
-  category: CategoryType;
-  hour: number;
-  isNight: boolean;
-  sourceScreen: string;
-  route: 'FASTEST_AVAILABLE_LAWYER' | 'CATEGORY_SPECIALIST' | 'GENERAL_QUEUE';
-  timestamp: Date;
-  time: string;
-  source: 'Emergency FAB';
-};
-
 export function FloatingFAB() {
   const router = useRouter();
   const pathname = usePathname();
@@ -41,7 +29,6 @@ export function FloatingFAB() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('General');
   const [connecting, setConnecting] = useState(false);
   const [priorityNote, setPriorityNote] = useState('');
-  const [leads, setLeads] = useState<EmergencyLead[]>([]);
   const lastSelectedCategory = useRef<CategoryType | null>(null);
   const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -168,8 +155,6 @@ export function FloatingFAB() {
     };
 
     console.log('EMERGENCY LEAD:', lead);
-    setLeads((prev) => [lead, ...prev]);
-
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
     callTimeoutRef.current = setTimeout(() => {
       Linking.openURL(`tel:${OFFICE_EMERGENCY_NUMBER}`).catch(() => {});

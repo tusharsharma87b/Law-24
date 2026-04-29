@@ -11,17 +11,17 @@ type AiAnalyzeResponse = {
   caseTypes: string[];
   explanation: string;
   solutionSteps?: string[];
-  legalSections: Array<{
+  legalSections: {
     title: string;
     description: string;
-  }>;
-  recommendedLawyers: Array<{
+  }[];
+  recommendedLawyers: {
     id?: string;
     name: string;
     specialization?: string;
     rating: number;
     city: string;
-  }>;
+  }[];
   relatedSearches: string[];
 };
 

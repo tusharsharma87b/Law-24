@@ -17,6 +17,11 @@ const verifyOtpSchema = z.object({
   deviceId: z.string().optional(),
 });
 
+const providerLoginSchema = z.object({
+  provider: z.enum(['otp', 'google', 'email', 'truecaller']),
+  data: z.record(z.unknown()).default({}),
+});
+
 export class AuthService {
   constructor(
     private readonly repo = new AuthRepository(),
@@ -28,11 +33,22 @@ export class AuthService {
     const code = `${Math.floor(100000 + Math.random() * 900000)}`;
     await this.repo.createOtp(data.target, code, data.purpose);
     await this.audit.log({ action: 'OTP_SENT', entity: 'auth', metadata: { target: data.target, purpose: data.purpose } });
+    if (process.env.NODE_ENV !== 'production') {
+      return { success: true, devOtp: code, expiresInSec: 300 };
+    }
     return { success: true, expiresInSec: 300 };
   }
 
   async verifyOtp(input: unknown, meta: { ipAddress?: string; userAgent?: string }) {
-    const data = verifyOtpSchema.parse(input);
+    const raw = input as Record<string, unknown>;
+    const normalizedInput = {
+      target: String(raw.target ?? raw.phone ?? ''),
+      code: String(raw.code ?? raw.otp ?? ''),
+      purpose: String(raw.purpose ?? 'login'),
+      deviceId: raw.deviceId as string | undefined,
+    };
+    const data = verifyOtpSchema.parse(normalizedInput);
+
     const otp = await this.repo.latestOtp(data.target, data.purpose);
     if (!otp || otp.verifiedAt || otp.expiresAt < new Date() || otp.code !== data.code) {
       throw new Error('Invalid or expired OTP');
@@ -61,6 +77,65 @@ export class AuthService {
     await this.audit.log({ userId: user.id, action: 'LOGIN_SUCCESS', entity: 'auth' });
 
     return { accessToken, refreshToken, user: { id: user.id, name: user.name, role: user.role } };
+  }
+
+  async login(
+    input: unknown,
+    meta: { ipAddress?: string; userAgent?: string }
+  ): Promise<{ token: string; user: { id: string; name: string; phone?: string | null; email?: string | null; role: string } }> {
+    const payload = providerLoginSchema.parse(input);
+
+    if (payload.provider === 'otp') {
+      const otpResult = await this.verifyOtp(
+        {
+          target: String(payload.data.target ?? payload.data.phone ?? ''),
+          code: String(payload.data.code ?? payload.data.otp ?? ''),
+          purpose: 'login',
+          deviceId: payload.data.deviceId,
+        },
+        meta
+      );
+      const token = (otpResult as any).token ?? (otpResult as any).accessToken;
+      if (!token) throw new Error('Token generation failed');
+      return {
+        token,
+        user: {
+          id: (otpResult as any).user.id,
+          name: (otpResult as any).user.name,
+          phone: (otpResult as any).user.phone ?? null,
+          email: (otpResult as any).user.email ?? null,
+          role: (otpResult as any).user.role,
+        },
+      };
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(`${payload.provider} provider is not enabled yet`);
+    }
+
+    const providerName = payload.provider;
+    const mockTarget =
+      String(payload.data.email ?? payload.data.phone ?? `${providerName}.dev@law24.local`);
+    const existing = mockTarget.includes('@')
+      ? await this.repo.findUserByEmail(mockTarget)
+      : await this.repo.findUserByPhone(mockTarget);
+    const user = existing ?? await this.repo.createUser({
+      name: `Test ${providerName[0].toUpperCase()}${providerName.slice(1)} User`,
+      email: mockTarget.includes('@') ? mockTarget : undefined,
+      phone: mockTarget.includes('@') ? undefined : mockTarget,
+      role: 'USER',
+    });
+    const token = signAccessToken({ sub: user.id, role: user.role as 'USER' | 'LAWYER' | 'ADMIN' });
+    return {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+      },
+    };
   }
 
   async getMe(userId: string) {

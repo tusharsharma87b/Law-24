@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, Platform, Pressable,
@@ -11,6 +11,7 @@ import { getCTA, useCaseStore, type NewCaseForm } from '../../store/useCaseStore
 import { AppIcon, type AppIconName } from '../../components/ui/AppIcon';
 import { getLawyersByCategory, type CategoryLawyer } from '../../constants/categoryLawyers';
 import { BottomSheetWrapper } from '../../components/ui/BottomSheetWrapper';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const URGENCY: Record<string, { color: string; bg: string; label: string }> = {
   critical: { color: Colors.danger,  bg: Colors.dangerSubtle,  label: 'CRITICAL' },
@@ -126,18 +127,10 @@ const CATEGORY_TO_LAWYER_MAP: Record<string, string> = {
   civil: 'Documentation & Civil',
 };
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
 function getExperienceYears(seed: string): number {
   let acc = 0;
   for (let i = 0; i < seed.length; i += 1) acc += seed.charCodeAt(i);
   return 5 + (acc % 11);
-}
-
-function dateToISO(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }
 
 function formatDateInput(raw: string): string {
@@ -668,7 +661,8 @@ export default function CasesScreen() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useLocalSearchParams<{ openNew?: string; category?: string; editCaseId?: string; source?: string }>();
-  const { cases, addCase, updateCase, refreshStatuses } = useCaseStore();
+  const { cases, addCase, updateCase, refreshStatuses, hydrateFromApi, isHydrating, hydrateError } = useCaseStore();
+  const user = useAuthStore((s) => s.user);
   const [showNewCaseForm, setShowNewCaseForm] = useState(false);
   const [lockedCategory, setLockedCategory] = useState<string | undefined>(undefined);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
@@ -676,14 +670,6 @@ export default function CasesScreen() {
   const openFromParamsHandledRef = useRef(false);
   // Track which categories are COLLAPSED (default: none — all start expanded)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
-  const dataLoaded = Array.isArray(cases);
-  if (!dataLoaded) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.bgPrimary }}>
-        <Text style={{ color: Colors.textPrimary }}>Loading...</Text>
-      </View>
-    );
-  }
 
   const toggleCat = (cat: string) => {
     setCollapsedCats((prev) => {
@@ -732,6 +718,12 @@ export default function CasesScreen() {
   }, [refreshStatuses]);
 
   useEffect(() => {
+    if (user?.id) {
+      hydrateFromApi(String(user.id));
+    }
+  }, [user?.id, hydrateFromApi]);
+
+  useEffect(() => {
     const validSource = ['subcategory', 'case_selector_add', 'edit_case'].includes(params.source ?? '');
     const contextTriggered =
       validSource ||
@@ -752,6 +744,15 @@ export default function CasesScreen() {
       openFromParamsHandledRef.current = false;
     }
   }, [params.openNew, params.category, params.editCaseId, params.source, pathname]);
+
+  const dataLoaded = Array.isArray(cases);
+  if (!dataLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.bgPrimary }}>
+        <Text style={{ color: Colors.textPrimary }}>Loading...</Text>
+      </View>
+    );
+  }
 
   // Group cases by category
   const grouped = cases.reduce<Record<string, typeof cases>>((acc, c) => {
@@ -781,6 +782,12 @@ export default function CasesScreen() {
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
       >
+        {isHydrating && (
+          <Text style={{ color: Colors.textSecondary, marginBottom: 10 }}>Loading cases...</Text>
+        )}
+        {hydrateError && (
+          <Text style={{ color: Colors.danger, marginBottom: 10 }}>{hydrateError}</Text>
+        )}
         {Object.entries(grouped).map(([cat, catCases]) => (
           <View key={cat} style={s.categoryGroup}>
             {/* Category Header */}

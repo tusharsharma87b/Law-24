@@ -1,20 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Animated, Alert, useWindowDimensions, Dimensions, Platform, Keyboard, ActivityIndicator,
-  BackHandler,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, TouchableWithoutFeedback,
+  TextInput, Animated, Alert, useWindowDimensions, Dimensions, Platform, Keyboard, BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
-import { LawyerCard, mapLawyerToCardModel } from '../components/lawyer/LawyerCard';
-import { LEGAL_DEPARTMENTS } from '../../constants/legalDepartments';
+import { LawyerCard, mapLawyerToCardModel } from '../../components/lawyer/LawyerCard';
+import { HOME_LEGAL_CATEGORIES } from '../../constants/homeLegalCategories';
 import { MOCK_LAWYERS } from '../../constants/mockData';
 import { DIRECTORY_LAWYERS } from '../../constants/lawyersDirectory';
 import { useAuthStore } from '../../store/useAuthStore';
 import { SectionHeader } from '../../components/ui/SectionHeader';
-import { SEARCH_PLACEHOLDERS } from '../../constants/searchIntentMap';
+import { resolveSearchIntent, SEARCH_PLACEHOLDERS } from '../../constants/searchIntentMap';
 import { NotificationSheet } from '../../components/notifications/NotificationSheet';
 import { useUnreadCount } from '../../store/useNotificationStore';
 import { useWalletStore } from '../../store/useWalletStore';
@@ -24,7 +24,6 @@ import {
 } from '../../constants/lawyerSearchSuggestions';
 import { useLawyerDataStore } from '../../store/useLawyerDataStore';
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
-import { mockAIResponse } from '../../utils/mockAI';
 
 // ─── Category accent colours (for dropdown) ──────────────────────────────────
 const CAT_ACCENT: Partial<Record<string, string>> = {
@@ -48,16 +47,23 @@ export default function HomeScreen() {
   const categoryCardWidth = viewportWidth / 4.8;
   const categoryCardHeight = 88;
   const categoryGap = 10;
-  const expertCardWidth = 280;
-  const topCardWidth = 280;
-  const listGap = 14;
+  const expertCardWidth = viewportWidth * 0.6;
+  const topCardWidth = viewportWidth * 0.6;
+  const listGap = 12;
 
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const unreadCount = useUnreadCount();
-  const { balance } = useWalletStore();
+  const { balance, hydrateWallet } = useWalletStore();
   const [notifSheetOpen, setNotifSheetOpen] = useState(false);
-  const { featuredLawyers, directoryLawyers, hydrateLawyerData, hydrated, isHydrating, preloadLawyerData } = useLawyerDataStore();
+  const {
+    featuredLawyers,
+    directoryLawyers,
+    hydrateLawyerData,
+    hydrated,
+    isHydrating,
+    preloadLawyerData,
+  } = useLawyerDataStore();
   const [isFirstLoad, setIsFirstLoad] = useState(true);
 
   useFocusEffect(
@@ -70,35 +76,11 @@ export default function HomeScreen() {
     }, [hydrateLawyerData, hydrated, isFirstLoad]),
   );
 
-  // ── Android hardware back button — exit confirmation ──────────────────────
-  // Only active when the Home screen is in focus.
-  // Prevents accidental app exit; does NOT touch auth state.
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS !== 'android') return;
-
-      const onBack = () => {
-        // If notification sheet is open, close it first (do not exit app)
-        if (notifSheetOpen) {
-          setNotifSheetOpen(false);
-          return true;
-        }
-        Alert.alert(
-          'Exit App?',
-          'Do you want to close Law24?',
-          [
-            { text: 'Stay', style: 'cancel' },
-            { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
-          ],
-          { cancelable: true },
-        );
-        return true; // consume the event — prevent default back behaviour
-      };
-
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
-      return () => sub.remove();
-    }, [notifSheetOpen]),
-  );
+  useEffect(() => {
+    if (user?.id) {
+      hydrateWallet(String(user.id));
+    }
+  }, [user?.id, hydrateWallet]);
 
   const openLawyers = (categoryParam?: string) => {
     if (categoryParam) {
@@ -111,7 +93,6 @@ export default function HomeScreen() {
   // ── Smart Search ─────────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [fixedTopH, setFixedTopH] = useState(110);
   const sugTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -141,7 +122,7 @@ export default function HomeScreen() {
       setSuggestions(raw.slice(0, 5));
     }, 300);
     return () => clearTimeout(sugTimer.current);
-  }, [search]);
+  }, [search, directoryLawyers]);
 
   const showDropdown = searchFocused && suggestions.length > 0;
 
@@ -161,68 +142,149 @@ export default function HomeScreen() {
     if (clearInput) setSearch('');
   }, []);
 
-  const handleLegalQuery = useCallback(
-    async (raw: string) => {
-      const query = raw.trim();
-      if (!query) return;
+  // ── Route-choice sheet ──────────────────────────────────────────────────
+  const [selectedSug, setSelectedSug] = useState<SearchSuggestion | null>(null);
+  const [routeSheetMounted, setRouteSheetMounted] = useState(false);
+  const routeSheetAnim = useRef(new Animated.Value(0)).current;
 
-      console.log('QUERY:', query);
-      Keyboard.dismiss();
-      setSearchFocused(false);
-      setIsAnalyzing(true);
+  const openRouteSheet = useCallback((sug: SearchSuggestion) => {
+    // Immediately dismiss keyboard + clear input — Google-like UX
+    Keyboard.dismiss();
+    setSearchFocused(false);
+    setSearch('');
+    setSelectedSug(sug);
+    setRouteSheetMounted(true);
+    routeSheetAnim.setValue(0);
+    Animated.spring(routeSheetAnim, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 3 }).start();
+  }, [routeSheetAnim]);
 
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        // Mock-only mode: no backend dependency for search/chips AI flow.
-        const data = mockAIResponse(query);
-        console.log('AI RESPONSE:', data);
+  const closeRouteSheet = useCallback(() => {
+    Animated.timing(routeSheetAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) { setRouteSheetMounted(false); setSelectedSug(null); }
+    });
+  }, [routeSheetAnim]);
 
-        setSearch('');
-        router.push({
-          pathname: '/smart-legal-search',
-          params: {
-            q: query,
-            ai: JSON.stringify(data),
-          },
-        } as any);
-      } catch (error) {
-        console.log('AI RESPONSE:', error);
-        Alert.alert('No results found', 'No results found. Try a different query.');
-      } finally {
-        setIsAnalyzing(false);
-      }
-    },
-    [router],
-  );
+  const goToLawyers = useCallback(() => {
+    closeRouteSheet();
+    const cat = selectedSug?.category ?? resolveSearchIntent(search);
+    if (cat) router.push({ pathname: '/(tabs)/lawyers', params: { category: cat } });
+    else router.push('/(tabs)/lawyers');
+  }, [closeRouteSheet, router, selectedSug, search]);
 
+  const goToNyaya = useCallback(() => {
+    closeRouteSheet();
+    router.push({ pathname: '/nyaya', params: { query: selectedSug?.query ?? search } });
+  }, [closeRouteSheet, router, selectedSug, search]);
+
+  // Submit from keyboard — routes directly if intent is clear, otherwise shows sheet
   const handleSearchSubmit = useCallback(() => {
     const q = search.trim();
     if (!q) return;
-    handleLegalQuery(q);
-  }, [search, handleLegalQuery]);
+    const category = resolveSearchIntent(q);
+    // If we have a direct category match, skip the sheet and go straight to lawyers
+    if (category) {
+      dismissSearch(true);
+      router.push({ pathname: '/(tabs)/lawyers', params: { category } });
+      return;
+    }
+    const synth: SearchSuggestion = {
+      id: 'manual',
+      display: q,
+      query: q,
+      type: 'trending',
+      category: undefined,
+      icon: 'search',
+    };
+    openRouteSheet(synth);
+  }, [search, openRouteSheet, dismissSearch, router]);
   // ─────────────────────────────────────────────────────────────────────────
   const sourceLawyers = featuredLawyers ?? MOCK_LAWYERS;
-  const liveExperts = sourceLawyers.filter((l) => l.isOnline).slice(0, 3);
-  const topRated = [...sourceLawyers].filter((l) => l.rating.average > 4.7).sort((a, b) => b.rating.average - a.rating.average).slice(0, 3);
-  const fastResponse = [...sourceLawyers].filter((l) => l.responseTimeMinutes <= 2).slice(0, 3);
-  const budgetLawyers = [...sourceLawyers].filter((l) => l.fees.chatPerMinuteInr < 20).slice(0, 3);
+  const liveExperts = sourceLawyers.filter((l) => l.isOnline);
+  const topRated = [...sourceLawyers].sort((a, b) => b.rating.average - a.rating.average);
   const [activeCategory, setActiveCategory] = useState(0);
   const [activeExpert, setActiveExpert] = useState(0);
   const [activeTopRated, setActiveTopRated] = useState(0);
-  const [activeFast, setActiveFast] = useState(0);
-  const [activeBudget, setActiveBudget] = useState(0);
 
   const categoryScrollX = useRef(new Animated.Value(0)).current;
   const expertsScrollX = useRef(new Animated.Value(0)).current;
   const topRatedScrollX = useRef(new Animated.Value(0)).current;
-  const fastScrollX = useRef(new Animated.Value(0)).current;
-  const budgetScrollX = useRef(new Animated.Value(0)).current;
+  const fabPulse = useRef(new Animated.Value(1)).current;
+  const fabPress = useRef(new Animated.Value(1)).current;
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // ── Android hardware back — exit confirmation (notifications only; overlays use backdrop taps)
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+
+      const onBack = () => {
+        if (notifSheetOpen) {
+          setNotifSheetOpen(false);
+          return true;
+        }
+        Alert.alert(
+          'Exit App?',
+          'Do you want to close Law24?',
+          [
+            { text: 'Stay', style: 'cancel' },
+            { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
+          ],
+          { cancelable: true },
+        );
+        return true;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+      return () => sub.remove();
+    }, [notifSheetOpen]),
+  );
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(fabPulse, { toValue: 1.08, duration: 900, useNativeDriver: true }),
+        Animated.timing(fabPulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [fabPulse]);
+
+  const sheetHeight = Math.round(windowHeight * 0.28);
+
+  const handleTalkToExpert = () => {
+    Alert.alert('Talk to Expert', 'Connect to a legal expert now?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Call Now', onPress: () => openLawyers() },
+    ]);
+  };
+
+  const openSheet = () => {
+    setSheetOpen(true);
+    Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 7 }).start();
+  };
+
+  const closeSheet = () => {
+    Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setSheetOpen(false);
+    });
+  };
+
+  const onFabPressIn = () => {
+    Animated.spring(fabPress, { toValue: 0.94, useNativeDriver: true, speed: 22, bounciness: 6 }).start();
+  };
+
+  const onFabPressOut = () => {
+    Animated.spring(fabPress, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 8 }).start();
+  };
 
   if (isFirstLoad && isHydrating) {
     return <LoadingScreen message="Loading experts..." />;
   }
 
   return (
+    <TouchableWithoutFeedback onPress={() => dismissSearch(false)} accessible={false}>
     <View style={s.root}>
       <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.bgPrimary }} />
 
@@ -250,7 +312,7 @@ export default function HomeScreen() {
             {/* Bell */}
             <TouchableOpacity
               style={s.iconBtn}
-              onPress={() => setNotifSheetOpen((v) => !v)}
+              onPress={() => setNotifSheetOpen(true)}
               activeOpacity={0.8}
               hitSlop={8}
             >
@@ -270,9 +332,7 @@ export default function HomeScreen() {
 
         {/* Search bar */}
         <View style={[s.searchRow, searchFocused && s.searchRowFocused]}>
-          <TouchableOpacity onPress={handleSearchSubmit} hitSlop={8}>
-            <MaterialIcons name="search" size={18} color={searchFocused ? Colors.primary : Colors.textTertiary} />
-          </TouchableOpacity>
+          <MaterialIcons name="search" size={18} color={searchFocused ? Colors.primary : Colors.textTertiary} />
           <View style={s.searchInputWrap}>
             {search.length === 0 && !searchFocused && (
               <Animated.Text style={[s.searchPlaceholder, { opacity: placeholderFade }]} numberOfLines={1}>
@@ -300,14 +360,9 @@ export default function HomeScreen() {
             />
           </View>
           {search.length > 0 ? (
-            <View style={s.searchActions}>
-              <TouchableOpacity onPress={() => { setSearch(''); setSearchFocused(false); }} hitSlop={10}>
-                <MaterialIcons name="close" size={16} color="#6B7280" />
-              </TouchableOpacity>
-              <TouchableOpacity style={s.goBtn} onPress={handleSearchSubmit} activeOpacity={0.85}>
-                <Text style={s.goBtnTxt}>Go</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity onPress={() => { setSearch(''); setSearchFocused(false); }} hitSlop={10}>
+              <MaterialIcons name="close" size={16} color="#6B7280" />
+            </TouchableOpacity>
           ) : (
             <TouchableOpacity
               style={s.micBtn}
@@ -338,7 +393,15 @@ export default function HomeScreen() {
                 key={chip.label}
                 style={s.chip}
                 activeOpacity={0.75}
-                onPress={() => handleLegalQuery(chip.label)}
+                onPress={() => {
+                  const category = resolveSearchIntent(chip.label);
+                  if (category) {
+                    dismissSearch(true);
+                    router.push({ pathname: '/(tabs)/lawyers', params: { category } });
+                  } else {
+                    setSearch(chip.label);
+                  }
+                }}
               >
                 <MaterialIcons name={chip.icon as any} size={12} color={Colors.primary} />
                 <Text style={s.chipTxt}>{chip.label}</Text>
@@ -384,31 +447,72 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── DEPARTMENTS ── */}
+        {/* LEGAL CATEGORIES */}
         <View style={s.section}>
-          <SectionHeader
-            title="Legal Departments"
-            onAction={() => router.push('/departments' as any)}
-          />
-          <Text style={s.deptSub}>Describe your problem — we'll find the right help</Text>
+          <SectionHeader title="Legal Categories" onAction={() => openLawyers()} />
+          <Animated.FlatList
+            data={HOME_LEGAL_CATEGORIES}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={s.catListFullBleed}
+            contentContainerStyle={s.catListContainer}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            snapToInterval={categoryCardWidth + categoryGap}
+            bounces={false}
+            removeClippedSubviews
+            initialNumToRender={5}
+            windowSize={5}
+            ListFooterComponent={<View style={{ width: 6 }} />}
+            getItemLayout={(_, index) => ({
+              length: categoryCardWidth + categoryGap,
+              offset: (categoryCardWidth + categoryGap) * index,
+              index,
+            })}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / (categoryCardWidth + categoryGap));
+              setActiveCategory(Math.max(0, idx));
+            }}
+            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: categoryScrollX } } }], { useNativeDriver: true })}
+            scrollEventThrottle={16}
+            renderItem={({ item, index }) => {
+              const inputRange = [
+                (index - 1) * (categoryCardWidth + categoryGap),
+                index * (categoryCardWidth + categoryGap),
+                (index + 1) * (categoryCardWidth + categoryGap),
+              ];
+              const scale = categoryScrollX.interpolate({ inputRange, outputRange: [0.9, 1.05, 0.9], extrapolate: 'clamp' });
+              const opacity = categoryScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
 
-          {/* 2-column grid of ALL departments — clean, no counts */}
-          <View style={s.deptGrid}>
-            {LEGAL_DEPARTMENTS.map((dept) => (
-              <TouchableOpacity
-                key={dept.id}
-                style={[s.deptCell, { borderColor: dept.color + '40' }]}
-                onPress={() => router.push({ pathname: '/department/[id]', params: { id: dept.id } })}
-                activeOpacity={0.84}
-              >
-                <View style={[s.deptCellIcon, { backgroundColor: dept.color + '1A' }]}>
-                  <MaterialIcons name={dept.icon as any} size={22} color={dept.color} />
-                </View>
-                <Text style={s.deptCellName} numberOfLines={2}>{dept.name}</Text>
-                <Text style={s.deptCellTagline} numberOfLines={2}>{dept.tagline}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+              return (
+                <Animated.View
+                  style={[
+                    s.catCardWrap,
+                    {
+                      width: categoryCardWidth,
+                      opacity,
+                      transform: [{ scale }],
+                    },
+                    index === activeCategory && s.activeGlow,
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={[s.catCard, { height: categoryCardHeight }]}
+                    activeOpacity={0.8}
+                    onPress={() => openLawyers(item.categoryParam)}
+                  >
+                    <View style={[s.catIcon, { backgroundColor: item.color + '22' }]}>
+                      <MaterialIcons name={item.icon as any} size={18} color={item.color} />
+                    </View>
+                    <Text style={s.catLabel} numberOfLines={2}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            }}
+          />
         </View>
 
         {/* NOT SURE CARD */}
@@ -436,7 +540,7 @@ export default function HomeScreen() {
             decelerationRate="fast"
             snapToInterval={expertCardWidth + listGap}
             bounces={false}
-            removeClippedSubviews={false}
+            removeClippedSubviews
             initialNumToRender={5}
             windowSize={5}
             ListFooterComponent={<View style={{ width: 16 }} />}
@@ -457,26 +561,25 @@ export default function HomeScreen() {
                 index * (expertCardWidth + listGap),
                 (index + 1) * (expertCardWidth + listGap),
               ];
-              const scale = expertsScrollX.interpolate({ inputRange, outputRange: [0.94, 1, 0.94], extrapolate: 'clamp' });
-              const opacity = expertsScrollX.interpolate({ inputRange, outputRange: [0.86, 1, 0.86], extrapolate: 'clamp' });
+              const scale = expertsScrollX.interpolate({ inputRange, outputRange: [0.9, 1.05, 0.9], extrapolate: 'clamp' });
+              const opacity = expertsScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
 
               return (
                 <Animated.View
                   style={[
                     s.expertCard,
-                    { width: expertCardWidth, opacity, transform: [{ scale }] },
+                    { width: expertCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
+                    index === activeExpert && s.activeGlow,
                   ]}
                 >
-                  <View style={s.cardWrapper}>
-                    <LawyerCard
-                      data={mapLawyerToCardModel(item)}
-                      onPress={() => {
-                        preloadLawyerData(item.id);
-                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
-                      }}
-                      ctaLabel="Talk Now"
-                    />
-                  </View>
+                  <LawyerCard
+                    data={mapLawyerToCardModel(item)}
+                    onPress={() => {
+                      preloadLawyerData(item.id);
+                      router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
+                    }}
+                    ctaLabel="Talk Now"
+                  />
                 </Animated.View>
               );
             }}
@@ -497,7 +600,7 @@ export default function HomeScreen() {
             decelerationRate="fast"
             snapToInterval={topCardWidth + listGap}
             bounces={false}
-            removeClippedSubviews={false}
+            removeClippedSubviews
             initialNumToRender={5}
             windowSize={5}
             ListFooterComponent={<View style={{ width: 16 }} />}
@@ -518,146 +621,25 @@ export default function HomeScreen() {
                 index * (topCardWidth + listGap),
                 (index + 1) * (topCardWidth + listGap),
               ];
-              const scale = topRatedScrollX.interpolate({ inputRange, outputRange: [0.94, 1, 0.94], extrapolate: 'clamp' });
-              const opacity = topRatedScrollX.interpolate({ inputRange, outputRange: [0.86, 1, 0.86], extrapolate: 'clamp' });
+              const scale = topRatedScrollX.interpolate({ inputRange, outputRange: [0.9, 1.05, 0.9], extrapolate: 'clamp' });
+              const opacity = topRatedScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
 
               return (
                 <Animated.View
                   style={[
                     s.topCard,
-                    { width: topCardWidth, opacity, transform: [{ scale }] },
+                    { width: topCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
+                    index === activeTopRated && s.activeGlow,
                   ]}
                 >
-                  <View style={s.cardWrapper}>
-                    <LawyerCard
-                      data={mapLawyerToCardModel(item)}
-                      onPress={() => {
-                        preloadLawyerData(item.id);
-                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
-                      }}
-                      ctaLabel="Consult"
-                    />
-                  </View>
-                </Animated.View>
-              );
-            }}
-          />
-        </View>
-
-        {/* FAST RESPONSE */}
-        <View style={s.section}>
-          <SectionHeader title="Fast Response" onAction={() => openLawyers()} />
-          <Animated.FlatList
-            data={fastResponse}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={s.listFullBleed}
-            contentContainerStyle={s.listContainer}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            snapToInterval={topCardWidth + listGap}
-            bounces={false}
-            removeClippedSubviews={false}
-            initialNumToRender={5}
-            windowSize={5}
-            ListFooterComponent={<View style={{ width: 16 }} />}
-            getItemLayout={(_, index) => ({
-              length: topCardWidth + listGap,
-              offset: (topCardWidth + listGap) * index,
-              index,
-            })}
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / (topCardWidth + listGap));
-              setActiveFast(Math.max(0, idx));
-            }}
-            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: fastScrollX } } }], { useNativeDriver: true })}
-            scrollEventThrottle={16}
-            renderItem={({ item, index }) => {
-              const inputRange = [
-                (index - 1) * (topCardWidth + listGap),
-                index * (topCardWidth + listGap),
-                (index + 1) * (topCardWidth + listGap),
-              ];
-              const scale = fastScrollX.interpolate({ inputRange, outputRange: [0.94, 1, 0.94], extrapolate: 'clamp' });
-              const opacity = fastScrollX.interpolate({ inputRange, outputRange: [0.86, 1, 0.86], extrapolate: 'clamp' });
-              return (
-                <Animated.View
-                  style={[
-                    s.topCard,
-                    { width: topCardWidth, opacity, transform: [{ scale }] },
-                  ]}
-                >
-                  <View style={s.cardWrapper}>
-                    <LawyerCard
-                      data={mapLawyerToCardModel(item)}
-                      onPress={() => {
-                        preloadLawyerData(item.id);
-                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
-                      }}
-                      ctaLabel="Talk Now"
-                    />
-                  </View>
-                </Animated.View>
-              );
-            }}
-          />
-        </View>
-
-        {/* BUDGET FRIENDLY */}
-        <View style={s.section}>
-          <SectionHeader title="Budget Friendly" onAction={() => openLawyers()} />
-          <Animated.FlatList
-            data={budgetLawyers}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={s.listFullBleed}
-            contentContainerStyle={s.listContainer}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            snapToInterval={topCardWidth + listGap}
-            bounces={false}
-            removeClippedSubviews={false}
-            initialNumToRender={5}
-            windowSize={5}
-            ListFooterComponent={<View style={{ width: 16 }} />}
-            getItemLayout={(_, index) => ({
-              length: topCardWidth + listGap,
-              offset: (topCardWidth + listGap) * index,
-              index,
-            })}
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / (topCardWidth + listGap));
-              setActiveBudget(Math.max(0, idx));
-            }}
-            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: budgetScrollX } } }], { useNativeDriver: true })}
-            scrollEventThrottle={16}
-            renderItem={({ item, index }) => {
-              const inputRange = [
-                (index - 1) * (topCardWidth + listGap),
-                index * (topCardWidth + listGap),
-                (index + 1) * (topCardWidth + listGap),
-              ];
-              const scale = budgetScrollX.interpolate({ inputRange, outputRange: [0.94, 1, 0.94], extrapolate: 'clamp' });
-              const opacity = budgetScrollX.interpolate({ inputRange, outputRange: [0.86, 1, 0.86], extrapolate: 'clamp' });
-              return (
-                <Animated.View
-                  style={[
-                    s.topCard,
-                    { width: topCardWidth, opacity, transform: [{ scale }] },
-                  ]}
-                >
-                  <View style={s.cardWrapper}>
-                    <LawyerCard
-                      data={mapLawyerToCardModel(item)}
-                      onPress={() => {
-                        preloadLawyerData(item.id);
-                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
-                      }}
-                      ctaLabel="Consult"
-                    />
-                  </View>
+                  <LawyerCard
+                    data={mapLawyerToCardModel(item)}
+                    onPress={() => {
+                      preloadLawyerData(item.id);
+                      router.push({ pathname: '/lawyer/[id]', params: { id: item.id } });
+                    }}
+                    ctaLabel="Consult"
+                  />
                 </Animated.View>
               );
             }}
@@ -670,8 +652,7 @@ export default function HomeScreen() {
       {/* ── Autocomplete dropdown — animated, compact, max 5 items ── */}
       {(showDropdown || suggestions.length > 0) && (
         <Animated.View
-          pointerEvents={showDropdown ? 'auto' : 'none'}
-          style={[s.dropWrap, { top: fixedTopH, opacity: dropFade }]}
+          style={[s.dropWrap, { top: fixedTopH, opacity: dropFade, pointerEvents: showDropdown ? 'auto' : 'none' } as any]}
         >
           {suggestions.map((sug, idx) => {
             const accent = sug.category ? (CAT_ACCENT[sug.category] ?? Colors.primary) : Colors.primary;
@@ -679,10 +660,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={sug.id}
                 style={[s.dropRow, idx < suggestions.length - 1 && s.dropRowBorder]}
-                onPress={() => {
-                  setSearch(sug.query || sug.display);
-                  setSearchFocused(false);
-                }}
+                onPress={() => openRouteSheet(sug)}
                 activeOpacity={0.75}
               >
                 {/* Icon */}
@@ -710,31 +688,147 @@ export default function HomeScreen() {
         </Animated.View>
       )}
 
+      {/* ── Route-choice sheet (lawyer vs AI) ── */}
+      {routeSheetMounted && selectedSug && (() => {
+        const accent = selectedSug.category ? (CAT_ACCENT[selectedSug.category] ?? '#4F6BFF') : '#4F6BFF';
+        const sheetTranslate = routeSheetAnim.interpolate({ inputRange: [0, 1], outputRange: [300, 0] });
+        const backdropOpacity = routeSheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.55] });
+        return (
+          <>
+            <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: backdropOpacity }]} pointerEvents="auto">
+              <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeRouteSheet} activeOpacity={1} />
+            </Animated.View>
+            <Animated.View style={[s.routeSheet, { transform: [{ translateY: sheetTranslate }] }]}>
+              <View style={s.routeHandle} />
+
+              {/* Query display */}
+              <View style={[s.routeQueryRow, { borderLeftColor: accent }]}>
+                <View style={[s.routeQueryIcon, { backgroundColor: accent + '22' }]}>
+                  <MaterialIcons name={selectedSug.icon as any} size={16} color={accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.routeQueryText} numberOfLines={1}>{selectedSug.display}</Text>
+                  {selectedSug.sub ? <Text style={s.routeQuerySub}>{selectedSug.sub}</Text> : null}
+                </View>
+                <TouchableOpacity onPress={closeRouteSheet} hitSlop={12}>
+                  <MaterialIcons name="close" size={18} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={s.routeChoiceLabel}>HOW WOULD YOU LIKE TO PROCEED?</Text>
+
+              {/* Option 1: Talk to a Lawyer */}
+              <TouchableOpacity style={s.routeCard} onPress={goToLawyers} activeOpacity={0.85}>
+                <View style={[s.routeCardIcon, { backgroundColor: '#4F6BFF22' }]}>
+                  <MaterialIcons name="people" size={22} color="#4F6BFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.routeCardTitle}>Talk to a Lawyer</Text>
+                  <Text style={s.routeCardSub}>
+                    Find {selectedSug.category ?? 'a'} lawyer · Browse experts
+                  </Text>
+                </View>
+                <MaterialIcons name="arrow-forward-ios" size={14} color="#6B7280" />
+              </TouchableOpacity>
+
+              {/* Option 2: Ask NyayaAI */}
+              <TouchableOpacity style={[s.routeCard, s.routeCardAI]} onPress={goToNyaya} activeOpacity={0.85}>
+                <View style={[s.routeCardIcon, { backgroundColor: Colors.goldSubtle }]}>
+                  <MaterialIcons name="auto-awesome" size={22} color={Colors.gold} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.routeCardTitle}>Ask NyayaAI</Text>
+                  <Text style={s.routeCardSub}>Instant guidance · Indian Law · IPC sections</Text>
+                </View>
+                <MaterialIcons name="arrow-forward-ios" size={14} color="#6B7280" />
+              </TouchableOpacity>
+            </Animated.View>
+          </>
+        );
+      })()}
+
       {/* ── Notification Sheet ── */}
       <NotificationSheet
         visible={notifSheetOpen}
         onClose={() => setNotifSheetOpen(false)}
       />
 
-      {isAnalyzing && (
-        <View style={s.loadingOverlay}>
-          <View style={s.loadingCard}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={s.loadingText}>Analyzing legal query...</Text>
-          </View>
-        </View>
-      )}
+      <Animated.View style={[s.fabWrap, { transform: [{ scale: fabPulse }, { scale: fabPress }] }]}>
+        <TouchableOpacity activeOpacity={0.92} onPress={openSheet} onPressIn={onFabPressIn} onPressOut={onFabPressOut}>
+          <LinearGradient
+            colors={['#4F6BFF', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={s.fab}
+          >
+            <MaterialIcons name="auto-awesome" size={24} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
 
+      {sheetOpen && (
+        <>
+          <Animated.View style={[s.sheetBackdrop, { opacity: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.4] }) }]}>
+            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeSheet} />
+          </Animated.View>
+          <Animated.View
+            style={[
+              s.bottomSheet,
+              { maxHeight: sheetHeight },
+              {
+                transform: [
+                  {
+                    translateY: sheetAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [sheetHeight + 40, 0],
+                    }),
+                  },
+                ],
+                opacity: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }),
+              },
+            ]}
+          >
+            <View style={s.sheetHandle} />
+            <TouchableOpacity
+              style={s.sheetAction}
+              activeOpacity={0.85}
+              onPress={() => {
+                closeSheet();
+                router.push('/nyaya');
+              }}
+            >
+              <View style={[s.sheetIconWrap, { backgroundColor: Colors.primarySubtle }]}>
+                <MaterialIcons name="auto-awesome" size={18} color={Colors.primary} />
+              </View>
+              <Text style={s.sheetActionText}>Ask NyayaAI</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.sheetAction}
+              activeOpacity={0.85}
+              onPress={() => {
+                closeSheet();
+                handleTalkToExpert();
+              }}
+            >
+              <View style={[s.sheetIconWrap, { backgroundColor: Colors.dangerSubtle }]}>
+                <MaterialIcons name="phone" size={18} color={Colors.danger} />
+              </View>
+              <Text style={s.sheetActionText}>Talk to Expert (Call)</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </>
+      )}
     </View>
+    </TouchableWithoutFeedback>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#020617', width: '100%', maxWidth: '100%' },
+  root: { flex: 1, backgroundColor: Colors.bgPrimary, overflow: 'hidden' },
 
   // Fixed top bar
   fixedTop: {
-    backgroundColor: '#020617',
+    backgroundColor: Colors.bgPrimary,
     paddingHorizontal: 16,
     paddingBottom: 8,
     borderBottomWidth: 1,
@@ -772,17 +866,9 @@ const s = StyleSheet.create({
   } as any,
   searchInput: { flex: 1, color: Colors.textPrimary, fontSize: 13, paddingVertical: 0 },
   micBtn: { padding: 2 },
-  searchActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  goBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  goBtnTxt: { color: '#fff', fontSize: 11, fontWeight: '700' },
 
-  chips: { marginTop: 10 },
-  chipsContent: { gap: 8, flexDirection: 'row' },
+  chips: { marginTop: 10, marginHorizontal: -16 },
+  chipsContent: { paddingHorizontal: 16, gap: 8, flexDirection: 'row' },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: Colors.primarySubtle,
@@ -822,6 +908,36 @@ const s = StyleSheet.create({
   },
   dropCatTxt: { fontSize: 10, fontWeight: '700', textTransform: 'capitalize' },
 
+  // Route-choice sheet
+  routeSheet: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: Colors.bgSecondary,
+    borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    paddingHorizontal: 16, paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+    borderTopWidth: 1, borderTopColor: Colors.border,
+    zIndex: 50, elevation: 40,
+  },
+  routeHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginTop: 10, marginBottom: 10 },
+  routeQueryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderLeftWidth: 3, paddingLeft: 10,
+    backgroundColor: Colors.bgElevated, borderRadius: 10,
+    padding: 10, marginBottom: 14,
+  },
+  routeQueryIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  routeQueryText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
+  routeQuerySub: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
+  routeChoiceLabel: { fontSize: 10, color: Colors.textTertiary, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 },
+  routeCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: Colors.bgElevated, borderRadius: 14,
+    padding: 14, marginBottom: 10,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  routeCardAI: { borderColor: Colors.goldSubtle, backgroundColor: 'rgba(245,166,35,0.05)' },
+  routeCardIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  routeCardTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  routeCardSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   aiCard: {
     borderRadius: 20, padding: 18, borderWidth: 1,
     borderColor: Colors.goldSubtle, marginBottom: 20,
@@ -839,22 +955,10 @@ const s = StyleSheet.create({
   aiTrustBlock: { marginTop: 10, flexDirection: 'row', justifyContent: 'center', gap: 16 },
   aiTrustLine:{ color: Colors.textTertiary, fontSize: 11, fontWeight: '500' },
   section:{ marginBottom: 20 },
-
-  // Departments — clean 2-column grid, no counts
-  deptSub: { fontSize: 12, color: Colors.textSecondary, marginBottom: 14, marginTop: -4 },
-  deptGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  deptCell: {
-    width: '47%', flexGrow: 1,
-    backgroundColor: Colors.bgSecondary, borderRadius: 18, padding: 14,
-    gap: 8, borderWidth: 1, minWidth: 140,
-  },
-  deptCellIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  deptCellName: { fontSize: 13, fontWeight: '800', color: Colors.textPrimary },
-  deptCellTagline: { fontSize: 11, color: Colors.textSecondary, lineHeight: 16 },
-  listFullBleed: { marginTop: 14, overflow: 'visible' },
-  listContainer: { paddingLeft: 16, paddingRight: 12, paddingVertical: 10 },
-  catListFullBleed: { marginTop: 14 },
-  catListContainer: { paddingRight: 6 },
+  listFullBleed: { marginTop: 14, marginHorizontal: -16 },
+  listContainer: { paddingHorizontal: 16 },
+  catListFullBleed: { marginTop: 14, marginHorizontal: -16 },
+  catListContainer: { paddingLeft: 16, paddingRight: 6 },
   catCardWrap: { marginRight: 10 },
   catCard:{ alignItems: 'center', justifyContent: 'center', padding: 8, backgroundColor: Colors.bgSecondary, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, gap: 6 },
   catIcon:{ width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
@@ -864,30 +968,83 @@ const s = StyleSheet.create({
   notSureSub:{ color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
   notSureBtn:{ backgroundColor: Colors.primarySubtle, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(59,91,219,0.25)' },
   notSureBtnTxt:{ color: Colors.primary, fontSize: 13, fontWeight: '700' },
-  expertCard:{ alignItems: 'stretch', overflow: 'visible' },
-  topCard:{ alignItems: 'stretch', overflow: 'visible' },
-  cardWrapper: { marginRight: 14, padding: 6, paddingBottom: 8 },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+  expertCard:{ alignItems: 'stretch' },
+  topCard:{ alignItems: 'stretch' },
+  activeGlow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.38,
+    shadowRadius: 10,
+    elevation: 7,
+  },
+  fabWrap: {
+    position: 'absolute',
+    bottom: 110,
+    right: 20,
+    zIndex: 10,
+    shadowColor: '#4F6BFF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 12,
+  },
+  fab: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 400,
   },
-  loadingCard: {
-    width: 220,
-    borderRadius: 14,
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    zIndex: 11,
+  },
+  bottomSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: Colors.bgSecondary,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingVertical: 18,
-    paddingHorizontal: 14,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    paddingTop: 8,
+    zIndex: 12,
+  },
+  sheetHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  sheetAction: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    height: 52,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    marginBottom: 10,
   },
-  loadingText: {
-    color: Colors.textPrimary,
-    fontSize: 13,
+  sheetIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetActionText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: Colors.textPrimary,
   },
 });

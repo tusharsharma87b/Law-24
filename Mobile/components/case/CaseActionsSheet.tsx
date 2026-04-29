@@ -13,7 +13,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Animated, PanResponder, Alert, TextInput, Platform,
+  Animated, PanResponder, Alert, TextInput,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -466,7 +466,7 @@ export function CaseActionsSheet({ visible, onClose, caseId, caseTitle, onEditCa
         Animated.timing(backdropAnim, { toValue: 0,   duration: 200, useNativeDriver: true }),
       ]).start(({ finished }) => { if (finished) { setMounted(false); } });
     }
-  }, [visible]);
+  }, [visible, backdropAnim, dragY, slideAnim]);
 
   const panResponder = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, { dy, dx }) => dy > 6 && Math.abs(dy) > Math.abs(dx),

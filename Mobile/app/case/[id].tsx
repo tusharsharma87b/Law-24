@@ -10,7 +10,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, FlatList, TextInput,
-  Platform, Alert, Linking,
+  Alert, Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { CaseActionsSheet } from '../../components/case/CaseActionsSheet';
@@ -395,7 +395,7 @@ const EVIDENCE_FOLDERS = [
 ] as const;
 type EvidenceFolder = (typeof EVIDENCE_FOLDERS)[number];
 const EVIDENCE_TAG_SUGGESTIONS = ['Identity Proof', 'Financial Evidence', 'Abuse Evidence', 'Communication Proof'];
-const UPLOAD_OPTIONS: Array<{ id: 'document' | 'video' | 'audio' | 'chat' | 'official'; label: string; icon: string }> = [
+const UPLOAD_OPTIONS: { id: 'document' | 'video' | 'audio' | 'chat' | 'official'; label: string; icon: string }[] = [
   { id: 'document', label: 'Upload Document', icon: 'description' },
   { id: 'video', label: 'Upload Video Evidence', icon: 'videocam' },
   { id: 'audio', label: 'Upload Audio Recording', icon: 'graphic-eq' },
@@ -458,10 +458,10 @@ function DocsTab({
   const [sortBy, setSortBy] = useState<'date'|'type'|'verified'>('date');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFolder, setUploadFolder] = useState<EvidenceFolder>('Evidence Files');
-  const docs = (c.documents ?? []) as any[];
   const evidenceData = useMemo(
-    () =>
-      docs.map((item) => ({
+    () => {
+      const docs = (c.documents ?? []) as any[];
+      return docs.map((item) => ({
         ...item,
         type: String(item.type || item.fileType || '')
           .toLowerCase()
@@ -471,8 +471,9 @@ function DocsTab({
           .replace('chats', 'chat'),
         folder: inferFolderFromDoc(item),
         uploadedBy: item.uploadedBy === 'lawyer' ? 'lawyer' : 'user',
-      })),
-    [docs]
+      }));
+    },
+    [c.documents]
   );
   const [filteredData, setFilteredData] = useState<any[]>([]);
 
@@ -1256,8 +1257,6 @@ export default function CaseDetailScreen() {
 
   const categoryLabel  = getCategoryLabel(activeCase.category ?? '');
   const categoryCount  = allCases.filter((c) => c.category === activeCase.category).length;
-  const u = URG[activeCase.urgency] ?? URG.medium;
-
   return (
     <View style={s.root}>
       <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.bgPrimary }} />

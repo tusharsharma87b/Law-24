@@ -67,7 +67,6 @@ export function ChangeLawyerFlowSheet({
   const mappedCategory = CATEGORY_TO_LAWYER_MAP[caseCategory] ?? 'Family Law';
   const platformLawyers = useMemo(() => getLawyersByCategory(mappedCategory), [mappedCategory]);
   const selectedLawyer = platformLawyers.find((l) => l.id === selectedLawyerId) ?? null;
-  const currentRate = Number(currentLawyer?.price ?? currentLawyer?.rate ?? 0);
   const hasOpenReview = Boolean(activeReviewTicket && ['OPEN', 'IN_REVIEW', 'ESCALATED'].includes(activeReviewTicket.status));
 
   const resetAndClose = () => {

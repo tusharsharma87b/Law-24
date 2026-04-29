@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import * as DocumentPicker from 'expo-document-picker';
 import { useCaseStore } from '../../store/useCaseStore';
+import { useAuthStore } from '../../store/useAuthStore';
 
 type CaseDocType = 'document' | 'audio' | 'video' | 'chat' | 'official';
 type RoleType = 'user' | 'lawyer';
@@ -26,7 +27,8 @@ const DOC_META: Record<CaseDocType, { label: string; icon: string; color: string
 };
 
 export default function DocumentsScreen() {
-  const { cases, addDocument, deleteDocument, updateDocument } = useCaseStore();
+  const { cases, addDocument, deleteDocument, updateDocument, hydrateFromApi, isHydrating, hydrateError } = useCaseStore();
+  const user = useAuthStore((s) => s.user);
   const currentRole: RoleType = 'user';
 
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
@@ -179,6 +181,12 @@ export default function DocumentsScreen() {
     return chips;
   }, [categoryCounts, totalDocuments]);
 
+  React.useEffect(() => {
+    if (user?.id) {
+      hydrateFromApi(String(user.id));
+    }
+  }, [user?.id, hydrateFromApi]);
+
   return (
     <View style={s.root}>
       <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.bgPrimary }} />
@@ -189,6 +197,8 @@ export default function DocumentsScreen() {
           <Text style={s.uploadTxt}>Upload</Text>
         </TouchableOpacity>
       </View>
+      {isHydrating ? <Text style={{ color: Colors.textSecondary, paddingHorizontal: 16 }}>Loading documents...</Text> : null}
+      {hydrateError ? <Text style={{ color: Colors.danger, paddingHorizontal: 16 }}>{hydrateError}</Text> : null}
 
       {!activeCase ? (
         <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">

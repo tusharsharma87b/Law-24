@@ -16,7 +16,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -50,7 +49,7 @@ import {
 } from '../../constants/lawyerSearchSuggestions';
 import {
   useLawyerFiltersStore,
-  DEFAULT_SHEET_STORE,
+  DEFAULT_SHEET_STORE
 } from '../../store/useLawyerFiltersStore';
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
 import { useLawyerDataStore } from '../../store/useLawyerDataStore';
@@ -105,14 +104,6 @@ type SheetFilters = {
   price: PriceFilter;
   courtType: CourtType | 'all';
   onlineOnly: boolean;
-};
-
-const DEFAULT_SHEET: SheetFilters = {
-  location: 'all',
-  rating: 'any',
-  price: 'any',
-  courtType: 'all',
-  onlineOnly: false,
 };
 
 // ─── Filter Sheet ─────────────────────────────────────────────────────────────
@@ -242,7 +233,7 @@ const FilterSheet = React.memo(function FilterSheet({
         if (finished) { setMounted(false); dragY.setValue(0); }
       });
     }
-  }, [visible, sheetH]);
+  }, [visible, sheetH, dragY, slideAnim, backdropAnim]);
 
   // ── Drag-to-dismiss via PanResponder on the handle ────────────────────────
   const panResponder = useRef(
@@ -777,8 +768,6 @@ export default function LawyersTabScreen() {
     setSheetOpen(false);
   }, [pendingSheet, setAppliedSheet]);
 
-  const clearPending = useCallback(() => setPendingSheet(DEFAULT_SHEET_STORE), []);
-
   const directoryFilters = useMemo<DirectoryFilters>(
     () => ({
       categories: storeCategories,
@@ -803,7 +792,7 @@ export default function LawyersTabScreen() {
       seen.add(l.profileId);
       return true;
     });
-  }, [directoryFilters, sort]);
+  }, [directoryFilters, sort, directoryLawyers]);
 
   const workingSet = useMemo(() => new Set(WORKING_ON_PROFILE_IDS), []);
 
@@ -876,12 +865,6 @@ export default function LawyersTabScreen() {
   }, [setCategories, setSearch]);
 
   // Single-select helper used by autocomplete suggestion
-  const handleCategoryChange = useCallback((cat: DirectoryCategory | 'all') => {
-    setCategories(cat === 'all' ? [] : [cat]);
-    setSearch('');
-    setSearchFocused(false);
-  }, [setCategories, setSearch]);
-
   const clearAllFilters = useCallback(() => {
     clearAllStore();
     setSearchFocused(false);

@@ -14,19 +14,20 @@
  * render null so the tabs handle themselves. Only redirect on the very first
  * load when no navigation has happened yet.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Redirect } from 'expo-router';
 import { useAuthStore } from '../store/useAuthStore';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 
 export default function Index() {
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
-  const [ready, setReady] = useState(false);
-  useEffect(() => { setReady(true); }, []);
+  const restoringSession = useAuthStore((s) => s.restoringSession);
+  const restoreSession = useAuthStore((s) => s.restoreSession);
+  useEffect(() => { restoreSession(); }, [restoreSession]);
 
   // Still initialising — show spinner so navigator is fully mounted before
   // <Redirect> fires (prevents "navigate before mounting" error).
-  if (!ready) {
+  if (restoringSession) {
     return <LoadingScreen message="Preparing app..." />;
   }
 

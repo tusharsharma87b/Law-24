@@ -6,14 +6,109 @@ import { requireAuth, type AuthRequest } from '../../middleware/auth.js';
 
 export const aiRouter = Router();
 
+aiRouter.post('/ai/search', async (req, res) => {
+  const body = z.object({ query: z.string().min(2) }).parse(req.body);
+  const q = body.query.toLowerCase();
+
+  const isSalary = q.includes('salary') || q.includes('wage') || q.includes('employment');
+  const isDivorce = q.includes('divorce') || q.includes('marriage') || q.includes('maintenance');
+  const isPolice = q.includes('police') || q.includes('fir') || q.includes('criminal');
+
+  if (isSalary) {
+    res.json({
+      summary: 'Legal summary based on query',
+      explanation: 'Detailed explanation for labour law remedies including wage recovery options.',
+      sections: ['Payment of Wages Act, 1936', 'Industrial Disputes Act, 1947'],
+      suggestedCases: ['Labour wage recovery dispute'],
+      lawyers: [
+        { name: 'Adv. Vikram Nair', rating: 4.6, city: 'Bangalore', specialization: 'Employment Law' },
+      ],
+    });
+    return;
+  }
+
+  if (isDivorce) {
+    res.json({
+      summary: 'Legal summary based on query',
+      explanation: 'Detailed explanation for family law process, maintenance, and petition pathways.',
+      sections: ['Hindu Marriage Act, 1955', 'Section 125 CrPC'],
+      suggestedCases: ['Mutual consent divorce', 'Maintenance petition'],
+      lawyers: [
+        { name: 'Adv. Priya Sharma', rating: 4.7, city: 'Mumbai', specialization: 'Family Law' },
+      ],
+    });
+    return;
+  }
+
+  if (isPolice) {
+    res.json({
+      summary: 'Legal summary based on query',
+      explanation: 'Detailed explanation for criminal complaint and police procedure.',
+      sections: ['BNS', 'BNSS'],
+      suggestedCases: ['FIR filing support'],
+      lawyers: [
+        { name: 'Adv. Rahul Mehta', rating: 4.8, city: 'New Delhi', specialization: 'Criminal Law' },
+      ],
+    });
+    return;
+  }
+
+  res.json({
+    summary: 'Legal summary based on query',
+    explanation: 'Detailed explanation...',
+    sections: ['Act 1', 'Act 2'],
+    suggestedCases: ['Case type 1'],
+    lawyers: [],
+  });
+});
+
 aiRouter.post('/ai/analyze', async (req, res) => {
   const body = z.object({
     query: z.string().min(2),
-    userId: z.string().min(1),
+    userId: z.string().optional(),
     language: z.enum(['en', 'hi']).default('en'),
   }).parse(req.body);
 
   const q = body.query.toLowerCase();
+  const demoMode = !body.userId;
+
+  if (demoMode) {
+    return res.json({
+      featuredAnswer: 'If you have worked and wages are due...',
+      caseTypes: ['Employment', 'Wages & bonus', 'Labour forum'],
+      explanation: 'Indian law protects timely payment...',
+      legalSections: [
+        {
+          title: 'Payment of Wages Act, 1936',
+          description: 'Employers must pay wages on time...',
+        },
+        {
+          title: 'Industrial Disputes Act, 1947',
+          description: 'Covers termination and disputes...',
+        },
+      ],
+      lawyers: [
+        {
+          name: 'Adv. Sunita Reddy',
+          rating: 4.5,
+          city: 'Hyderabad',
+          specialization: 'Consumer Protection',
+        },
+        {
+          name: 'Adv. Vikram Nair',
+          rating: 4.6,
+          city: 'Bangalore',
+          specialization: 'Employment Law',
+        },
+      ],
+      relatedSearches: [
+        'Salary slip na mile to kya kare?',
+        'PF nahi jama hua to kya kare?',
+        'Notice period kitna hona chahiye?',
+      ],
+    });
+  }
+
   const isSalary = q.includes('salary') || q.includes('employment') || q.includes('job') || q.includes('naukri') || q.includes('vetan') || q.includes('wages');
   const isDivorce = q.includes('divorce') || q.includes('maintenance') || q.includes('matrimonial') || q.includes('talaq') || q.includes('talaaq') || q.includes('shaadi');
   const isProperty = q.includes('property') || q.includes('rent') || q.includes('tenant') || q.includes('ghar') || q.includes('zameen');
@@ -33,58 +128,40 @@ aiRouter.post('/ai/analyze', async (req, res) => {
           : ['General Civil', 'Legal Consultation'];
 
   const legalSections = isSalary
-    ? ['Payment of Wages Act, 1936', 'Industrial Disputes Act, 1947']
-    : isDivorce
-      ? ['Section 125 CrPC', 'Hindu Marriage Act, 1955']
-      : isLoan
-        ? ['RBI Fair Practices Code', 'SARFAESI Act (where applicable)', 'Consumer Protection Act, 2019']
-      : isProperty
-        ? ['Transfer of Property Act, 1882', 'Specific Relief Act, 1963']
-        : isCriminal
-          ? ['CrPC', 'Bharatiya Nyaya Sanhita (BNS)']
-          : ['Civil Procedure Code'];
-
-  const solutionSteps = isSalary
     ? [
-        'Collect salary slips, joining letter, attendance proof, and bank statements.',
-        'Send a written demand notice to employer (email + physical copy).',
-        'If unresolved, file complaint with Labour Commissioner in your district.',
-        'Escalate to labour court/authority with all documents and timeline.',
+        { title: 'Payment of Wages Act, 1936', description: 'Ensures timely payment of wages and allows claim for delayed salary.' },
+        { title: 'Industrial Disputes Act, 1947', description: 'Provides dispute resolution path between employees and employers.' },
+        { title: 'Shops & Establishment Act', description: 'State-level protection for employee rights in establishments.' },
       ]
     : isDivorce
       ? [
-          'Gather marriage documents, ID proofs, and current address details.',
-          'Decide legal path: mutual consent divorce or contested divorce.',
-          'Prepare details on maintenance, child custody, and residence needs.',
-          'File petition through family court with lawyer support.',
+          { title: 'Hindu Marriage Act, 1955', description: 'Governs divorce, separation, and matrimonial remedies.' },
+          { title: 'Section 125 CrPC', description: 'Provides maintenance rights for spouse and dependents.' },
+          { title: 'Protection of Women from Domestic Violence Act, 2005', description: 'Civil remedies for protection and support.' },
         ]
       : isLoan
         ? [
-            'Collect loan agreement, sanction letter, EMI receipts, and bank communication.',
-            'Check charges, penalties, and notices for RBI guideline violations.',
-            'Send written dispute/representation to lender nodal officer.',
-            'If unresolved, file complaint via RBI Ombudsman / consumer forum.',
+            { title: 'Consumer Protection Act, 2019', description: 'Remedy against unfair banking and lender practices.' },
+            { title: 'RBI Fair Practices Code', description: 'Guidelines for transparent and fair loan recovery conduct.' },
+            { title: 'SARFAESI Act (where applicable)', description: 'Framework for secured asset recovery by banks.' },
           ]
-        : isProperty
+      : isProperty
+        ? [
+            { title: 'Transfer of Property Act, 1882', description: 'Governs transfer, sale, lease, and property rights.' },
+            { title: 'Specific Relief Act, 1963', description: 'Provides injunctions and specific performance remedies.' },
+            { title: 'Registration Act, 1908', description: 'Covers registration and evidentiary value of property documents.' },
+          ]
+        : isCriminal
           ? [
-              'Collect title deed, registry papers, tax receipts, and possession proof.',
-              'Prepare chronology of dispute and parties involved.',
-              'Send legal notice to opposite party before civil filing.',
-              'File injunction / declaration / possession case as advised.',
+              { title: 'Bharatiya Nyaya Sanhita (BNS)', description: 'Defines offences and criminal liability in India.' },
+              { title: 'Bharatiya Nagarik Suraksha Sanhita (BNSS)', description: 'Procedure for investigation, arrest, and trial.' },
+              { title: 'Bharatiya Sakshya Adhiniyam', description: 'Rules regarding admissibility and proof of evidence.' },
             ]
-          : isCriminal
-            ? [
-                'Write clear incident timeline with date/time/place and parties.',
-                'Preserve chats, calls, screenshots, bills, and witness details.',
-                'File complaint/FIR at police station or online portal.',
-                'Track FIR status and seek bail/protection through lawyer if required.',
-              ]
-            : [
-                'Write your issue clearly with timeline and supporting evidence.',
-                'Identify all parties and required documents.',
-                'Send legal notice where applicable.',
-                'Proceed with case filing in the correct forum.',
-              ];
+          : [
+              { title: 'Civil Procedure Code', description: 'Procedure for civil dispute filing and trial.' },
+              { title: 'Limitation Act, 1963', description: 'Defines legal time limits for filing claims.' },
+              { title: 'Indian Evidence principles', description: 'Guides documentary and oral proof in disputes.' },
+            ];
 
   const relatedSearches = isSalary
     ? ['wrongful termination compensation', 'unpaid wages legal notice', 'labour court filing process']
@@ -102,12 +179,11 @@ aiRouter.post('/ai/analyze', async (req, res) => {
     featuredAnswer: `Based on your query, the likely legal direction is ${caseTypes[0]}. You can proceed with a structured legal action plan below and consult the recommended lawyers.`,
     caseTypes,
     explanation: 'This analysis is generated from your query to help you identify case category, practical steps, legal provisions, and the right lawyer match.',
-    solutionSteps,
     legalSections,
-    recommendedLawyers: [
-      { id: 'LAW-001', name: 'Adv. Anjali Kapoor', specialization: 'Property Law', rating: 4.9, city: 'Bengaluru' },
-      { id: 'LAW-002', name: 'Adv. Rahul Mehta', specialization: 'Criminal Law', rating: 4.8, city: 'New Delhi' },
-      { id: 'LAW-003', name: 'Adv. Priya Sharma', specialization: 'Family Law', rating: 4.7, city: 'Mumbai' },
+    lawyers: [
+      { name: 'Adv. Anjali Kapoor', specialization: 'Property Law', rating: 4.9, city: 'Bengaluru' },
+      { name: 'Adv. Rahul Mehta', specialization: 'Criminal Law', rating: 4.8, city: 'New Delhi' },
+      { name: 'Adv. Priya Sharma', specialization: 'Family Law', rating: 4.7, city: 'Mumbai' },
     ],
     relatedSearches,
   };

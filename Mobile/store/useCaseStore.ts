@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { MOCK_CASES } from '../constants/mockData';
 import { LAWYERS } from '../constants/categoryLawyers';
+import { apiGet } from '../src/services/api';
 
 // Shape for a user-registered case (form-created)
 export type NewCaseForm = {
@@ -78,6 +79,8 @@ export type CaseReminder = {
 
 interface CaseState {
   cases: CaseRecord[];
+  isHydrating: boolean;
+  hydrateError: string | null;
   reminders: CaseReminder[];
   user: { walletBalance: number };
   activeCaseId: string | null;
@@ -106,6 +109,7 @@ interface CaseState {
   raiseConcern: (concern: Omit<CaseConcern, 'id' | 'status' | 'createdAt'>) => void;
   addReminder: (reminder: CaseReminder) => void;
   updateCaseStage: (caseId: string, stage: string) => void;
+  hydrateFromApi: (userId: string) => Promise<void>;
 }
 
 type TimelineStep = { step: string; done: boolean };
@@ -414,6 +418,8 @@ const persistReminders = (reminders: CaseReminder[]) => {
 
 export const useCaseStore = create<CaseState>((set, get) => ({
   cases: loadInitialCases(),
+  isHydrating: false,
+  hydrateError: null,
   reminders: loadInitialReminders(),
   user: { walletBalance: 1000 },
   activeCaseId: null,
@@ -854,5 +860,80 @@ export const useCaseStore = create<CaseState>((set, get) => ({
       persistCases(nextCases);
       return { cases: nextCases };
     });
+  },
+  hydrateFromApi: async (userId) => {
+    set({ isHydrating: true, hydrateError: null });
+    try {
+      const [casesRes, docsRes] = await Promise.all([
+        apiGet(`/cases/${userId}`),
+        apiGet('/documents'),
+      ]);
+      const docsByCase = new Map<string, any[]>();
+      if (Array.isArray(docsRes)) {
+        docsRes.forEach((d: any) => {
+          const key = String(d.caseId ?? '');
+          if (!docsByCase.has(key)) docsByCase.set(key, []);
+          docsByCase.get(key)?.push({
+            id: String(d.id),
+            name: String(d.fileName ?? 'Document'),
+            type: String(d.type ?? 'document'),
+            format: 'unknown',
+            caseId: key,
+            caseTag: 'General',
+            tags: Array.isArray(d.tags) ? d.tags : [],
+            uploadedBy: 'user',
+            verificationStatus: 'pending',
+            courtReady: false,
+            size: 0,
+            uri: '',
+            createdAt: new Date().toISOString(),
+          });
+        });
+      }
+      if (Array.isArray(casesRes)) {
+        const normalized = casesRes.map((c: any) =>
+          applyLifecycleStatus({
+            id: String(c.id),
+            category: String(c.category ?? 'civil'),
+            title: String(c.title ?? 'Case'),
+            chips: [String(c.caseType ?? c.category ?? 'General')],
+            type: String(c.caseType ?? 'Civil'),
+            successProbability: Number(c.successProbability ?? 0),
+            urgency: (String(c.urgency ?? 'medium') as any),
+            stage: String(c.stage ?? 'Filing'),
+            stages: ['Filing', 'Hearing', 'Judgment', 'Closed'],
+            activeStageIndex: 0,
+            court: String(c.courtName ?? c.court ?? ''),
+            judge: String(c.judge ?? ''),
+            caseNumber: String(c.caseNumber ?? ''),
+            filedDate: String(c.filedDate ?? new Date().toISOString()),
+            nextHearing: String(c.nextHearing ?? ''),
+            notes: String(c.notes ?? ''),
+            freeReplacementUsed: false,
+            tickets: [],
+            concerns: [],
+            createdAt: String(c.createdAt ?? new Date().toISOString()),
+            status: String(c.status ?? 'active'),
+            priority: Boolean(c.priority),
+            cta: 'Start Chat',
+            nextAction: 'Monitor case progress',
+            pendingActions: [],
+            aiStrategy: '',
+            aiSteps: [],
+            documents: docsByCase.get(String(c.id)) ?? [],
+            events: [],
+            timelineFlow: generateTimeline(String(c.category ?? 'civil')),
+            timeline: [],
+            similarCases: [],
+            lawyer: (MOCK_CASES[0] as any).lawyer,
+          } as any)
+        );
+        set({ cases: normalized });
+      }
+    } catch (e) {
+      set({ hydrateError: (e as Error).message || 'Failed to load cases/documents' });
+    } finally {
+      set({ isHydrating: false });
+    }
   },
 }));

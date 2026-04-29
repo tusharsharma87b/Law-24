@@ -7,7 +7,7 @@
  * • Mark all read button in header
  */
 import React, {
-  useCallback, useEffect, useMemo, useRef, useState,
+  useCallback, useEffect, useMemo, useRef,
 } from 'react';
 import {
   Animated,
@@ -159,7 +159,7 @@ const SectionLabel = React.memo(function SectionLabel({ label }: { label: string
 const EmptyState = () => (
   <View style={ns.empty}>
     <Text style={ns.emptyEmoji}>🎉</Text>
-    <Text style={ns.emptyTitle}>You're all caught up!</Text>
+    <Text style={ns.emptyTitle}>You are all caught up!</Text>
     <Text style={ns.emptySub}>No new notifications right now.</Text>
   </View>
 );

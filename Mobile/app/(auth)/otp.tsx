@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { useAuthStore } from '../../store/useAuthStore';
+import { pickAccessToken, sendOtp, verifyOtp } from '../../src/services/authService';
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
@@ -69,31 +70,54 @@ export default function OtpScreen() {
     }
   };
 
-  const handleVerify = (code?: string) => {
+  const handleVerify = async (code?: string) => {
     const fullOtp = code ?? otp.join('');
     if (fullOtp.length < OTP_LENGTH) { shake(); setHasError(true); return; }
 
-    setLoading(true);
-    // Mock: any 6 digits = success
-    setTimeout(() => {
-      setLoading(false);
-      const mockUser = {
-        id: 'USR-001', name: 'Anjali Singh',
-        phone: type === 'phone' ? `+91${value}` : '',
-        email: type === 'email' ? (value as string) : undefined,
-        plan: 'free' as const, clientId: '#621', avatarInitials: 'AS',
+    try {
+      setLoading(true);
+      const target = String(value ?? '');
+      const result = await verifyOtp(target, fullOtp);
+      const accessToken = pickAccessToken(result);
+      if (!accessToken) {
+        throw new Error('Missing access token from server');
+      }
+      const me = result.user;
+      const user = {
+        id: String(me.id),
+        name: me.name ?? 'Law24 User',
+        phone: me.phone ?? (type === 'phone' ? `+91${target}` : ''),
+        email: me.email ?? undefined,
+        plan: 'free' as const,
+        clientId: `#${String(me.id).slice(-4)}`,
+        avatarInitials: String(me.name ?? 'Law24 User')
+          .split(' ')
+          .map((part: string) => part[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase(),
       };
-      useAuthStore.getState().login(mockUser);
+      await useAuthStore.getState().login(user, accessToken);
       router.replace('/(tabs)');
-    }, 1000);
+    } catch {
+      shake();
+      setHasError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (resendCount >= 3) return;
-    setResendCount((c) => c + 1);
-    setCountdown(RESEND_SECONDS);
-    setOtp(Array(OTP_LENGTH).fill(''));
-    inputRefs.current[0]?.focus();
+    try {
+      await sendOtp(String(value ?? ''), type === 'email' ? 'email' : 'phone');
+      setResendCount((c) => c + 1);
+      setCountdown(RESEND_SECONDS);
+      setOtp(Array(OTP_LENGTH).fill(''));
+      inputRefs.current[0]?.focus();
+    } catch {
+      setHasError(true);
+    }
   };
 
   return (
@@ -110,7 +134,7 @@ export default function OtpScreen() {
 
         {/* TITLE */}
         <Text style={styles.title}>Verify your {type === 'email' ? 'email' : 'number'}</Text>
-        <Text style={styles.subtitle}>We've sent a 6-digit code to</Text>
+        <Text style={styles.subtitle}>We&apos;ve sent a 6-digit code to</Text>
         <Text style={styles.sentTo}>{displayValue}</Text>
 
         {/* OTP BOXES */}

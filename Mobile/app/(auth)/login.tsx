@@ -7,10 +7,12 @@ import { useRouter } from 'expo-router';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { useAuthStore } from '../../store/useAuthStore';
+import { sendOtp } from '../../src/services/authService';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [whatsapp, setWhatsapp] = useState(true);
   const router = useRouter();
   const setWhatsappStore = useAuthStore((s) => s.setWhatsapp);
@@ -23,16 +25,20 @@ export default function LoginScreen() {
     setError(''); return true;
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!validate()) return;
-    router.push({ pathname: '/(auth)/otp', params: { type: 'phone', value: phone } });
+    try {
+      setLoading(true);
+      await sendOtp(phone, 'phone');
+      router.push({ pathname: '/(auth)/otp', params: { type: 'phone', value: phone } });
+    } catch (e) {
+      setError((e as Error).message || 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleGoogle = () => {
-    const mockUser = { id: 'USR-001', name: 'Anjali Singh', phone: '', email: 'anjali@gmail.com', plan: 'free' as const, clientId: '#621', avatarInitials: 'AS' };
-    useAuthStore.getState().login(mockUser);
-    router.replace('/(tabs)');
-  };
+  const handleGoogle = () => { Alert.alert('Google login', 'Coming soon. Please continue with OTP.'); };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -68,7 +74,7 @@ export default function LoginScreen() {
             onPress={handleContinue}
             activeOpacity={0.85}
           >
-            <Text style={styles.ctaText}>Continue Securely</Text>
+            <Text style={styles.ctaText}>{loading ? 'Sending OTP...' : 'Continue Securely'}</Text>
           </TouchableOpacity>
 
           <Text style={styles.trust}>PRIVATE  •  SECURE  •  VERIFIED  LEGAL NETWORK</Text>
@@ -102,7 +108,7 @@ export default function LoginScreen() {
           <View style={styles.socialRow}>
             <TouchableOpacity
               style={styles.socialBtnHalf}
-              onPress={() => router.push({ pathname: '/(auth)/otp', params: { type: 'email', value: 'user@law24.in' } })}
+              onPress={() => Alert.alert('Email OTP', 'Please continue with mobile OTP for now.')}
               activeOpacity={0.8}
             >
               <MaterialIcons name="email" size={18} color="#22C55E" />
@@ -110,7 +116,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.socialBtnHalf}
-              onPress={() => { Alert.alert('Truecaller', 'Auto-login via Truecaller (demo)'); handleGoogle(); }}
+              onPress={() => { Alert.alert('Truecaller', 'Coming soon. Please continue with OTP.'); }}
               activeOpacity={0.8}
             >
               <MaterialIcons name="verified-user" size={18} color="#3B5BDB" />
@@ -121,7 +127,7 @@ export default function LoginScreen() {
 
         {/* TESTIMONIAL */}
         <View style={styles.testimonial}>
-          <Text style={styles.quote}>"Helped me understand my situation clearly."</Text>
+          <Text style={styles.quote}>&quot;Helped me understand my situation clearly.&quot;</Text>
           <Text style={styles.quoteName}>— VERIFIED USER</Text>
         </View>
 

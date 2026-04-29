@@ -36,12 +36,12 @@ function shiftMonth(isoDate: string, delta: number): string {
   return toIso(d);
 }
 
-function getMonthCells(isoDate: string): Array<{ iso: string; day: number } | null> {
+function getMonthCells(isoDate: string): ({ iso: string; day: number } | null)[] {
   const base = new Date(`${isoDate}T00:00:00`);
   const start = new Date(base.getFullYear(), base.getMonth(), 1);
   const firstWeekday = start.getDay();
   const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
-  const cells: Array<{ iso: string; day: number } | null> = [];
+  const cells: ({ iso: string; day: number } | null)[] = [];
 
   for (let i = 0; i < firstWeekday; i += 1) cells.push(null);
   for (let day = 1; day <= daysInMonth; day += 1) {
