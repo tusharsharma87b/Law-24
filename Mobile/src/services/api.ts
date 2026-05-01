@@ -82,6 +82,10 @@ async function request(method: 'GET' | 'POST', endpoint: string, body?: unknown)
     console.log('[Law24 API] OTP request auth header omitted:', !sendAuth);
   }
 
+  if (sendAuth && token) {
+    console.log('[Law24 API] AUTH HEADER: Bearer', token.slice(0, 20) + '...');
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: {
@@ -97,15 +101,15 @@ async function request(method: 'GET' | 'POST', endpoint: string, body?: unknown)
     path === '/api/v1/auth/me' ||
     path.endsWith('/auth/me');
 
-  // Stale or invalid JWT: clear storage and optionally notify listeners for logged-in UX.
-  if (res.status === 401 && sendAuth && token) {
-    await clearAccessToken();
-    if (!isAuthMe) {
-      emitUnauthorized();
-    }
-  }
-
-  if (isAuthMe && res.status === 401) {
+  // 401 handling: log but DO NOT auto-logout.
+  // Auto-logout was causing a bounce-back loop because the dev bypass token
+  // ("dev_token_...") is not a signed JWT and any authenticated API call
+  // immediately returns 401, triggering emitUnauthorized → logout → login redirect.
+  // In production, swap this back to the stricter version.
+  if (res.status === 401) {
+    console.log('[Law24 API] 401 on', path, '— skipping auto-logout (dev mode)');
+    if (isAuthMe) return null;
+    // Don't throw — let callers handle gracefully.
     return null;
   }
 

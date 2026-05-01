@@ -112,7 +112,7 @@ export default function LegalSearchScreen() {
             Smart legal search
           </Text>
           <Text style={s.queryEcho} numberOfLines={2}>
-            “{rawQ}”
+            �{rawQ}�
           </Text>
         </View>
       </View>
@@ -120,7 +120,7 @@ export default function LegalSearchScreen() {
       {loading ? (
         <View style={s.loadingWrap}>
           <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={s.loadingTxt}>Understanding your issue…</Text>
+          <Text style={s.loadingTxt}>Understanding your issue�</Text>
         </View>
       ) : result ? (
         <ScrollView
@@ -164,13 +164,13 @@ export default function LegalSearchScreen() {
                   onPress={() => setUiLang('hi')}
                   activeOpacity={0.85}
                 >
-                  <Text style={[s.langBtnTxt, uiLang === 'hi' && s.langBtnTxtOn]}>हिंदी</Text>
+                  <Text style={[s.langBtnTxt, uiLang === 'hi' && s.langBtnTxtOn]}>?????</Text>
                 </TouchableOpacity>
               </View>
             </View>
             <Text style={s.body}>{uiLang === 'hi' ? result.explanationHi : result.explanationEn}</Text>
             {result.detectedLang === 'mixed' ? (
-              <Text style={s.detected}>Detected: mixed Hindi–English input</Text>
+              <Text style={s.detected}>Detected: mixed Hindi�English input</Text>
             ) : null}
           </View>
 
@@ -211,7 +211,7 @@ export default function LegalSearchScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={s.lawyerName}>{law.name}</Text>
                   <Text style={s.lawyerMeta}>
-                    {law.tier} · ★{law.rating.toFixed(1)} · {law.city}
+                    {law.tier} � ?{law.rating.toFixed(1)} � {law.city}
                   </Text>
                   <Text style={s.lawyerSpec}>{law.specialization}</Text>
                 </View>

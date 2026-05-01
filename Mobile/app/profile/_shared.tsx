@@ -87,3 +87,5 @@ const styles = StyleSheet.create({
   stateText: { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
 });
 
+
+export default ScreenShell;

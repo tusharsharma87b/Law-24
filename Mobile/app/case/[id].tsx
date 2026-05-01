@@ -1,11 +1,11 @@
 /**
- * Case OS — redesigned for layman users.
+ * Case OS � redesigned for layman users.
  *
  * Design principles:
- *  • One screen = one case in focus
- *  • Show "what to do next" — not just status
- *  • Plain English everywhere, no legal jargon
- *  • Every section has a clear action button
+ *  � One screen = one case in focus
+ *  � Show "what to do next" � not just status
+ *  � Plain English everywhere, no legal jargon
+ *  � Every section has a clear action button
  */
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
@@ -27,7 +27,7 @@ import { useChatStore } from '../../store/useChatStore';
 
 type AnyCase = typeof MOCK_CASES[0] & Record<string, any>;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 
 /** Human-readable name for each case (shown in the selector tab) */
 function getFriendlyName(c: AnyCase): string {
@@ -39,10 +39,10 @@ function getFriendlyName(c: AnyCase): string {
   if (t.includes('wrongful') || t.includes('terminat')) return 'Job\nTermination';
   if (t.includes('divorce'))                            return 'Divorce';
   if (t.includes('custody'))                            return 'Child\nCustody';
-  return (c.chips[0] ?? c.title.split('—')[0].trim()).slice(0, 14);
+  return (c.chips[0] ?? c.title.split('�')[0].trim()).slice(0, 14);
 }
 
-/** Friendly category header — "Matrimonial Cases" not "matrimonial" */
+/** Friendly category header � "Matrimonial Cases" not "matrimonial" */
 function getCategoryLabel(cat: string): string {
   const map: Record<string, string> = {
     matrimonial: 'Matrimonial Cases',
@@ -59,7 +59,7 @@ function getCategoryLabel(cat: string): string {
   return map[cat] ?? 'My Cases';
 }
 
-/** Days until next hearing — plain language */
+/** Days until next hearing � plain language */
 function getDaysUntil(dateStr: string | undefined): string {
   if (!dateStr) return '';
   const months: Record<string, number> = {
@@ -73,12 +73,12 @@ function getDaysUntil(dateStr: string | undefined): string {
   if (diff < 0)  return 'Passed';
   if (diff === 0) return 'Today!';
   if (diff === 1) return 'Tomorrow!';
-  if (diff <= 7)  return `In ${diff} days ⚡`;
+  if (diff <= 7)  return `In ${diff} days ?`;
   if (diff <= 30) return `In ${diff} days`;
   return `In ~${Math.round(diff / 30)} months`;
 }
 
-/** Urgency label → colour */
+/** Urgency label ? colour */
 const URG: Record<string, { color: string; bg: string }> = {
   critical: { color: Colors.danger,  bg: Colors.dangerSubtle },
   high:     { color: Colors.warning, bg: Colors.warningSubtle },
@@ -86,7 +86,7 @@ const URG: Record<string, { color: string; bg: string }> = {
   low:      { color: Colors.success, bg: Colors.successSubtle },
 };
 
-/** Priority → colour */
+/** Priority ? colour */
 const PRI = URG;
 
 /** Dot colour for timeline types */
@@ -104,7 +104,7 @@ const DOT: Record<string, string> = {
   support: Colors.warning,
 };
 
-// ─── Case Selector Bar ────────────────────────────────────────────────────────
+// --- Case Selector Bar --------------------------------------------------------
 function CaseSelector({
   allCases,
   activeId,
@@ -156,7 +156,7 @@ function CaseSelector({
   );
 }
 
-// ─── "What To Do" Tab ────────────────────────────────────────────────────────
+// --- "What To Do" Tab --------------------------------------------------------
 function WhatToDoTab({
   c,
   onGoToDocs,
@@ -175,7 +175,7 @@ function WhatToDoTab({
   return (
     <View style={td.root}>
 
-      {/* ── "Your Next Step" hero card ── */}
+      {/* -- "Your Next Step" hero card -- */}
       {(c.nextAction || dynamicNextStep) && (
         <LinearGradient
           colors={[u.color + '22', u.color + '08']}
@@ -197,7 +197,7 @@ function WhatToDoTab({
         </LinearGradient>
       )}
 
-      {/* ── Next Hearing countdown ── */}
+      {/* -- Next Hearing countdown -- */}
       {c.nextHearing && (
         <View style={td.hearingCard}>
           <View style={td.hearingLeft}>
@@ -205,7 +205,7 @@ function WhatToDoTab({
             <View>
               <Text style={td.hearingLabel}>Next Court Hearing</Text>
               <Text style={td.hearingDate}>{c.nextHearing}</Text>
-              {days ? <Text style={[td.hearingCountdown, days.includes('⚡') && { color: Colors.warning }]}>{days}</Text> : null}
+              {days ? <Text style={[td.hearingCountdown, days.includes('?') && { color: Colors.warning }]}>{days}</Text> : null}
             </View>
           </View>
           <TouchableOpacity style={td.remindBtn} activeOpacity={0.8} onPress={onRemind}>
@@ -215,13 +215,13 @@ function WhatToDoTab({
         </View>
       )}
 
-      {/* ── Simple status grid ── */}
+      {/* -- Simple status grid -- */}
       <View style={td.statusGrid}>
         {[
           { icon: 'emoji-events', color: Colors.gold, top: `${c.successProbability}%`, bot: 'Winning Chance' },
           { icon: 'timeline',     color: Colors.primary, top: c.stage ?? 'Filing', bot: 'Current Stage' },
           { icon: 'folder',       color: Colors.success, top: c.caseNumber ?? 'Pending', bot: 'Case Number' },
-          { icon: 'update',       color: Colors.blue, top: c.nextHearing ?? '—', bot: 'Next Hearing' },
+          { icon: 'update',       color: Colors.blue, top: c.nextHearing ?? '�', bot: 'Next Hearing' },
         ].map((st) => (
           <View key={st.bot} style={td.statusCard}>
             <View style={[td.statusIcon, { backgroundColor: st.color + '1A' }]}>
@@ -233,7 +233,7 @@ function WhatToDoTab({
         ))}
       </View>
 
-      {/* ── Pending actions — plain language ── */}
+      {/* -- Pending actions � plain language -- */}
       {c.pendingActions?.length > 0 && (
         <View style={td.section}>
           <Text style={td.sectionTitle}>Things You Must Do</Text>
@@ -258,7 +258,7 @@ function WhatToDoTab({
         </View>
       )}
 
-      {/* ── AI guidance — plain language ── */}
+      {/* -- AI guidance � plain language -- */}
       {c.aiStrategy && (
         <View style={td.aiCard}>
           <View style={td.aiHeader}>
@@ -283,7 +283,7 @@ function WhatToDoTab({
         </View>
       )}
 
-      {/* ── Similar outcomes ── */}
+      {/* -- Similar outcomes -- */}
       {c.similarCases?.length > 0 && (
         <View style={td.section}>
           <Text style={td.sectionTitle}>Cases Like Yours</Text>
@@ -303,7 +303,7 @@ function WhatToDoTab({
         </View>
       )}
 
-      {/* ── Quick action buttons ── */}
+      {/* -- Quick action buttons -- */}
       <View style={td.quickGrid}>
         {[
           { icon: 'upload-file', label: 'Upload Docs',  color: Colors.primary, action: onGoToDocs },
@@ -319,7 +319,7 @@ function WhatToDoTab({
   );
 }
 
-// ─── Events / Timeline Tab ────────────────────────────────────────────────────
+// --- Events / Timeline Tab ----------------------------------------------------
 function EventsTab({ c }: { c: AnyCase }) {
   const events = ([...(c.events ?? [])] as any[]).sort((a, b) => {
     const ta = new Date(a.date || 0).getTime();
@@ -370,7 +370,7 @@ function EventsTab({ c }: { c: AnyCase }) {
   );
 }
 
-// ─── Evidence & Documents Tab ─────────────────────────────────────────────────
+// --- Evidence & Documents Tab -------------------------------------------------
 const DOC_TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
   document: { label: 'Documents', icon: 'description', color: Colors.primary },
   audio: { label: 'Audio', icon: 'graphic-eq', color: Colors.gold },
@@ -430,7 +430,7 @@ function inferFolderFromDoc(doc: any): EvidenceFolder {
 
 function formatFileSize(size: unknown): string {
   const bytes = typeof size === 'number' && Number.isFinite(size) ? size : Number(size);
-  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+  if (!Number.isFinite(bytes) || bytes <= 0) return '�';
   if (bytes < 1024) return `${bytes} B`;
   const kb = bytes / 1024;
   if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
@@ -559,7 +559,7 @@ function DocsTab({
                 <View style={{ flex: 1 }}>
                   <Text style={dc.docName} numberOfLines={1}>{doc.name}</Text>
                   <Text style={dc.docMeta}>
-                    {formatFileSize(doc.size)} · {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')}
+                    {formatFileSize(doc.size)} � {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => onView(doc)} hitSlop={8}>
@@ -683,7 +683,7 @@ function DocsTab({
               <View style={{ flex: 1 }}>
                 <Text style={dc.docName} numberOfLines={1}>{doc.name}</Text>
                 <Text style={dc.docMeta}>
-                  {formatFileSize(doc.size)} · {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')} · Uploaded by {doc.uploadedBy === 'lawyer' ? 'Lawyer' : 'User'}
+                  {formatFileSize(doc.size)} � {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')} � Uploaded by {doc.uploadedBy === 'lawyer' ? 'Lawyer' : 'User'}
                 </Text>
                 <View style={dc.tagRow}>
                   {(doc.tags ?? []).slice(0, 3).map((t: string) => (
@@ -776,7 +776,7 @@ function DocsTab({
                 <Text style={dc.uploadOptionTxt}>{opt.label}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={dc.tagHint}>Suggested tags: {EVIDENCE_TAG_SUGGESTIONS.join(' • ')}</Text>
+            <Text style={dc.tagHint}>Suggested tags: {EVIDENCE_TAG_SUGGESTIONS.join(' � ')}</Text>
             <TouchableOpacity style={dc.closeUploadBtn} onPress={() => setShowUploadModal(false)} activeOpacity={0.85}>
               <Text style={dc.closeUploadTxt}>Cancel</Text>
             </TouchableOpacity>
@@ -787,7 +787,7 @@ function DocsTab({
   );
 }
 
-// ─── Ask AI Tab ───────────────────────────────────────────────────────────────
+// --- Ask AI Tab ---------------------------------------------------------------
 function AskAITab({ c }: { c: AnyCase }) {
   const router = useRouter();
   const questions = [
@@ -796,7 +796,7 @@ function AskAITab({ c }: { c: AnyCase }) {
     `How strong is my case right now?`,
     'Explain what happened in simple words',
     'What will the judge look at?',
-    `How long will ${c.title.split('—')[0].trim()} take?`,
+    `How long will ${c.title.split('�')[0].trim()} take?`,
   ];
   return (
     <View style={ai.root}>
@@ -804,7 +804,7 @@ function AskAITab({ c }: { c: AnyCase }) {
         <View style={ai.bannerIcon}><MaterialIcons name="auto-awesome" size={22} color={Colors.gold} /></View>
         <View style={{ flex: 1 }}>
           <Text style={ai.bannerTitle}>Ask Anything About Your Case</Text>
-          <Text style={ai.bannerSub}>AI trained on Indian law — answers in plain English</Text>
+          <Text style={ai.bannerSub}>AI trained on Indian law � answers in plain English</Text>
         </View>
       </View>
       <Text style={ai.stratLabel}>AI says right now:</Text>
@@ -836,7 +836,7 @@ function AskAITab({ c }: { c: AnyCase }) {
   );
 }
 
-// ─── Your Lawyer Tab ──────────────────────────────────────────────────────────
+// --- Your Lawyer Tab ----------------------------------------------------------
 function YourLawyerTab({
   c,
   caseId,
@@ -917,7 +917,7 @@ function YourLawyerTab({
           <Text style={lw.desig}>{l?.designation ?? 'Advocate'}</Text>
           <View style={lw.ratingRow}>
             <MaterialIcons name="star" size={12} color={Colors.gold} />
-            <Text style={lw.rating}>{l?.rating?.average ?? '—'}</Text>
+            <Text style={lw.rating}>{l?.rating?.average ?? '�'}</Text>
             <Text style={lw.ratingCount}>({l?.rating?.totalReviews ?? 0} reviews)</Text>
             <View style={lw.metaDot} />
             <Text style={lw.exp}>{l?.experienceYears ?? 0} years experience</Text>
@@ -944,9 +944,9 @@ function YourLawyerTab({
       {/* Stats */}
       <View style={lw.statsRow}>
         {[
-          { v: `${l?.cases?.winRatePercent ?? '—'}%`, l: 'Win Rate' },
-          { v: `${l?.cases?.total ?? '—'}+`, l: 'Cases Handled' },
-          { v: `${l?.experienceYears ?? '—'} yrs`, l: 'Experience' },
+          { v: `${l?.cases?.winRatePercent ?? '�'}%`, l: 'Win Rate' },
+          { v: `${l?.cases?.total ?? '�'}+`, l: 'Cases Handled' },
+          { v: `${l?.experienceYears ?? '�'} yrs`, l: 'Experience' },
         ].map((st, i, arr) => (
           <React.Fragment key={st.l}>
             <View style={lw.statItem}>
@@ -977,7 +977,7 @@ function YourLawyerTab({
         {activeReviewTicket && (
           <View style={lw.reviewBadge}>
             <Text style={lw.reviewBadgeTxt}>
-              Review in progress (ETA: 48h) • {activeReviewTicket.status}
+              Review in progress (ETA: 48h) � {activeReviewTicket.status}
             </Text>
           </View>
         )}
@@ -1010,7 +1010,7 @@ function YourLawyerTab({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// --- Main Screen --------------------------------------------------------------
 const TABS = [
   { key: 'todo',    label: 'What To Do' },
   { key: 'events',  label: 'Events' },
@@ -1143,7 +1143,7 @@ export default function CaseDetailScreen() {
   }, [refreshLawyerReviewSLAs]);
 
   const handleOpenLawyerProfile = useCallback((lawyerId: string) => {
-    router.push({ pathname: '/lawyer/[id]', params: { id: lawyerId } });
+    router.push({ pathname: '/lawyer/[id]', params: { id: lawyerId } } as any);
   }, [router]);
 
   const handleCreateReviewTicket = useCallback(async ({ reason, note, type }: { reason: string; note: string; type: 'LAWYER_CHANGE_REQUEST' }) => {
@@ -1231,7 +1231,7 @@ export default function CaseDetailScreen() {
     });
     addEvent(activeCase.id, {
       title: 'Own Lawyer Added for Verification',
-      description: `${name} (${phone})${firm ? ` • ${firm}` : ''}${email ? ` • ${email}` : ''}`,
+      description: `${name} (${phone})${firm ? ` � ${firm}` : ''}${email ? ` � ${email}` : ''}`,
       date: new Date().toISOString(),
       type: 'support',
     });
@@ -1261,7 +1261,7 @@ export default function CaseDetailScreen() {
     <View style={s.root}>
       <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.bgPrimary }} />
 
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <View style={s.header}>
         <TouchableOpacity onPress={handleBack} style={s.backPill} hitSlop={10} activeOpacity={0.8}>
           <MaterialIcons name="arrow-back-ios" size={13} color={Colors.textSecondary} />
@@ -1276,7 +1276,7 @@ export default function CaseDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Case Selector ── */}
+      {/* -- Case Selector -- */}
       <CaseSelector
         allCases={allCases}
         activeId={activeCaseId}
@@ -1284,7 +1284,7 @@ export default function CaseDetailScreen() {
         onAdd={() => router.push({ pathname: '/(tabs)/cases', params: { openNew: '1', source: 'case_selector_add', category: activeCase.category } })}
       />
 
-      {/* ── Stage progress strip ── */}
+      {/* -- Stage progress strip -- */}
       <View style={s.stageStrip}>
         <View style={s.stageTrack}>
           {activeCase.stages.map((st, idx) => (
@@ -1310,7 +1310,7 @@ export default function CaseDetailScreen() {
         </View>
       </View>
 
-      {/* ── Tab Bar (always visible/clickable) ── */}
+      {/* -- Tab Bar (always visible/clickable) -- */}
       <View style={s.tabBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabContent}>
           {TABS.map((tab, idx) => (
@@ -1338,7 +1338,7 @@ export default function CaseDetailScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── Tab Content ── */}
+          {/* -- Tab Content -- */}
           <View style={s.tabBody}>
             {activeTab === 0 && <WhatToDoTab c={activeCase} onGoToDocs={() => setActiveTab(2)} onGoToAI={() => setActiveTab(3)} onRemind={handleRemind} />}
             {activeTab === 1 && <EventsTab c={activeCase} />}
@@ -1363,7 +1363,7 @@ export default function CaseDetailScreen() {
         </ScrollView>
       )}
 
-      {/* ── Case Actions bottom sheet (3-dot menu) ── */}
+      {/* -- Case Actions bottom sheet (3-dot menu) -- */}
       <CaseActionsSheet
         visible={actionsSheetOpen}
         onClose={() => setActionsSheetOpen(false)}
@@ -1380,7 +1380,7 @@ export default function CaseDetailScreen() {
   );
 }
 
-// ─── Main Styles ──────────────────────────────────────────────────────────────
+// --- Main Styles --------------------------------------------------------------
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bgPrimary },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle },
@@ -1421,7 +1421,7 @@ const s = StyleSheet.create({
   docsBody: { flex: 1, padding: 16 },
 });
 
-// ─── Case Selector Styles ─────────────────────────────────────────────────────
+// --- Case Selector Styles -----------------------------------------------------
 const cs = StyleSheet.create({
   wrap: { backgroundColor: Colors.bgSecondary, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle, paddingTop: 10 },
   row: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingBottom: 10 },
@@ -1436,7 +1436,7 @@ const cs = StyleSheet.create({
   otherTxt: { fontSize: 10, color: Colors.textTertiary },
 });
 
-// ─── What To Do Tab Styles ────────────────────────────────────────────────────
+// --- What To Do Tab Styles ----------------------------------------------------
 const td = StyleSheet.create({
   root: { gap: 14 },
   nextCard: { borderRadius: 18, padding: 16, gap: 14, borderWidth: 1 },
@@ -1494,7 +1494,7 @@ const td = StyleSheet.create({
   quickBtnTxt: { fontSize: 13, fontWeight: '700' },
 });
 
-// ─── Events Styles ────────────────────────────────────────────────────────────
+// --- Events Styles ------------------------------------------------------------
 const ev = StyleSheet.create({
   root: { gap: 0 },
   intro: { fontSize: 13, color: Colors.textSecondary, marginBottom: 16, lineHeight: 20 },
@@ -1517,7 +1517,7 @@ const ev = StyleSheet.create({
   personTxt: { fontSize: 10, color: Colors.textTertiary },
 });
 
-// ─── Docs Styles ──────────────────────────────────────────────────────────────
+// --- Docs Styles --------------------------------------------------------------
 const dc = StyleSheet.create({
   root: { gap: 0 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
@@ -1618,7 +1618,7 @@ const dc = StyleSheet.create({
   closeUploadTxt: { color: Colors.textSecondary, fontSize: 13, fontWeight: '700' },
 });
 
-// ─── AI Tab Styles ────────────────────────────────────────────────────────────
+// --- AI Tab Styles ------------------------------------------------------------
 const ai = StyleSheet.create({
   root: { gap: 13 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.bgSecondary, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: Colors.goldSubtle },
@@ -1635,7 +1635,7 @@ const ai = StyleSheet.create({
   openTxt: { fontSize: 14, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
 });
 
-// ─── Lawyer Styles ────────────────────────────────────────────────────────────
+// --- Lawyer Styles ------------------------------------------------------------
 const lw = StyleSheet.create({
   root: { gap: 14 },
   card: { flexDirection: 'row', gap: 14, backgroundColor: Colors.bgSecondary, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: Colors.border },

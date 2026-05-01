@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,12 +21,13 @@ import { NYAYA_FREE_DAILY_LIMIT, useNyayaCreditsStore } from '../store/useNyayaC
 
 export default function NyayaScreen() {
   const router = useRouter();
-  const { query: prefillQuery, prefilledQuestion, autoSend } = useLocalSearchParams<{
+  const { query: prefillQuery, aiPrompt, autoSend } = useLocalSearchParams<{
     query?: string;
-    prefilledQuestion?: string;
+    aiPrompt?: string;
     autoSend?: string;
   }>();
   const [input, setInput] = useState('');
+  const [hasAutoTriggered, setHasAutoTriggered] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const { messages, isLoading, addUserMessage, addAIResponse, setLoading, clearSession } = useNyayaStore();
   const ensureDay = useNyayaCreditsStore((st) => st.ensureDay);
@@ -36,30 +37,27 @@ export default function NyayaScreen() {
   const freeRemainingToday = useNyayaCreditsStore((st) => st.freeRemainingToday());
   const packBalance = useNyayaCreditsStore((st) => st.packBalance);
 
+    // Handle auto-triggering from search or home card
   useEffect(() => {
-    if (prefillQuery && messages.length === 0) {
-      setInput(`My issue: ${prefillQuery}`);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (autoSend !== '1' || hasAutoTriggered || messages.length > 0) return;
 
-  useEffect(() => {
-    if (!prefilledQuestion || autoSend !== '1' || messages.length > 0) return;
-    setInput(prefilledQuestion);
+    const initialQuery = aiPrompt || prefillQuery;
+    if (!initialQuery) return;
+
+    setHasAutoTriggered(true);
+    setInput(initialQuery);
+
     const timer = setTimeout(() => {
       ensureDay();
       if (!canAskQuestion()) {
-        Alert.alert(
-          'No questions left',
-          'You have used today’s allowance and pack credits. Buy credits or try again tomorrow.'
-        );
+        Alert.alert('No credits', 'Please top up your Nyaya credits in Profile.');
         return;
       }
-      handleSend(prefilledQuestion);
-    }, 50);
+      handleSend(initialQuery);
+    }, 300);
+
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefilledQuestion, autoSend, messages.length]);
+  }, [prefillQuery, aiPrompt, autoSend, messages.length, hasAutoTriggered]);
 
   const handleSend = (text?: string) => {
     const query = (text ?? input).trim();
@@ -68,7 +66,7 @@ export default function NyayaScreen() {
     if (!canAskQuestion()) {
       Alert.alert(
         'Limit reached',
-        'Buy credits from Profile → Nyaya AI, or wait until tomorrow for your free questions.'
+        `Buy credits from Profile ? Nyaya AI, or wait until tomorrow for your free questions.`
       );
       return;
     }
@@ -247,7 +245,7 @@ export default function NyayaScreen() {
                           <Text style={s.lawyerName}>{lawyer.name}</Text>
                           <Text style={s.lawyerSpec}>{lawyer.specialization}</Text>
                           <Text style={s.lawyerMeta}>
-                            {lawyer.city}, {lawyer.state} · {lawyer.experienceYears} yrs exp. · ★ {lawyer.rating.toFixed(1)}
+                            {lawyer.city}, {lawyer.state} · {lawyer.experienceYears} yrs exp. · ? {lawyer.rating.toFixed(1)}
                           </Text>
                           <Text style={s.lawyerFee}>{lawyer.feeLabel}</Text>
                         </View>
@@ -257,7 +255,7 @@ export default function NyayaScreen() {
                       </View>
                       <TouchableOpacity
                         style={s.consultBtn}
-                        onPress={() => router.push(`/lawyer/${lawyer.id}` as any)}
+                        onPress={() => router.push({ pathname: '/lawyer/[id]', params: { id: lawyer.id } } as any)}
                         activeOpacity={0.85}
                       >
                         <Text style={s.consultBtnTxt}>Consult</Text>
@@ -294,7 +292,7 @@ export default function NyayaScreen() {
       <View style={s.inputBar}>
         <SafeAreaView edges={['bottom']} style={{ backgroundColor: Colors.bgSecondary }}>
           {blocked ? (
-            <Text style={s.limitNote}>You’ve reached today’s limit. Tap Buy to add credits or try again tomorrow.</Text>
+            <Text style={s.limitNote}>You've reached today's limit. Tap Buy to add credits or try again tomorrow.</Text>
           ) : null}
           <View style={s.inputRow}>
             <TextInput
@@ -471,3 +469,5 @@ const s = StyleSheet.create({
   sendBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
   sendBtnDim: { opacity: 0.4 },
 });
+
+

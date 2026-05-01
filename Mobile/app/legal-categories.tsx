@@ -55,6 +55,31 @@ export default function LegalCategoriesScreen() {
             );
           })}
         </View>
+
+        {/* AI Assistance Card */}
+        <TouchableOpacity
+          style={s.aiCard}
+          onPress={() => router.push('/smart-legal-search' as any)}
+          activeOpacity={0.88}
+        >
+          <View style={s.aiIconWrap}>
+            <MaterialIcons name="auto-awesome" size={22} color={Colors.primary} />
+          </View>
+          <View style={s.aiTextWrap}>
+            <Text style={s.aiTitle}>Not sure what your issue is?</Text>
+            <Text style={s.aiSubtitle}>
+              Describe your situation in simple language and get instant legal guidance.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={s.aiButton}
+            onPress={() => router.push('/smart-legal-search' as any)}
+            activeOpacity={0.85}
+          >
+            <Text style={s.aiButtonText}>Ask AI</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+
       </ScrollView>
     </View>
   );
@@ -80,4 +105,31 @@ const s = StyleSheet.create({
   iconWrap: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
   cardMeta: { fontSize: 11, color: Colors.textSecondary },
+
+  // AI Assistance Card
+  aiCard: {
+    marginTop: 20,
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.primary + '40',
+    padding: 16,
+    gap: 10,
+  },
+  aiIconWrap: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: Colors.primary + '1A',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  aiTextWrap: { gap: 4 },
+  aiTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  aiSubtitle: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19 },
+  aiButton: {
+    marginTop: 6,
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  aiButtonText: { fontSize: 14, fontWeight: '700', color: '#0D1117' },
 });

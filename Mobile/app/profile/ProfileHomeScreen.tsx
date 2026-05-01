@@ -49,7 +49,7 @@ function Row({
   );
 }
 
-export function ProfileHomeScreen() {
+export default function ProfileHomeScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);

@@ -455,15 +455,15 @@ export function CaseActionsSheet({ visible, onClose, caseId, caseTitle, onEditCa
       slideAnim.setValue(800);
       backdropAnim.setValue(0);
       Animated.parallel([
-        Animated.spring(slideAnim,    { toValue: 0, useNativeDriver: true, speed: 22, bounciness: 0 }),
-        Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.spring(slideAnim,    { toValue: 0, useNativeDriver: false, speed: 22, bounciness: 0 }),
+        Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
       ]).start();
     } else {
       if (isClosing.current) return;
       isClosing.current = true;
       Animated.parallel([
-        Animated.timing(slideAnim,    { toValue: 800, duration: 220, useNativeDriver: true }),
-        Animated.timing(backdropAnim, { toValue: 0,   duration: 200, useNativeDriver: true }),
+        Animated.timing(slideAnim,    { toValue: 800, duration: 220, useNativeDriver: false }),
+        Animated.timing(backdropAnim, { toValue: 0,   duration: 200, useNativeDriver: false }),
       ]).start(({ finished }) => { if (finished) { setMounted(false); } });
     }
   }, [visible, backdropAnim, dragY, slideAnim]);
@@ -478,7 +478,7 @@ export function CaseActionsSheet({ visible, onClose, caseId, caseTitle, onEditCa
       if (finalDy > DISMISS_THRESHOLD || vy > 0.5) {
         onClose();
       } else {
-        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: false, speed: 20, bounciness: 6 }).start();
       }
     },
   })).current;

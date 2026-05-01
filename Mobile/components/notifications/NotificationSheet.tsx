@@ -95,8 +95,8 @@ const NotificationRow = React.memo(function NotificationRow({
     if (item.read) return;
     // Quick flash + mark
     Animated.sequence([
-      Animated.timing(flashAnim, { toValue: 0.3, duration: 100, useNativeDriver: true }),
-      Animated.timing(flashAnim, { toValue: 1,   duration: 100, useNativeDriver: true }),
+      Animated.timing(flashAnim, { toValue: 0.3, duration: 100, useNativeDriver: false }),
+      Animated.timing(flashAnim, { toValue: 1,   duration: 100, useNativeDriver: false }),
     ]).start(() => onMarkRead(item.id));
   }, [item.read, item.id, flashAnim, onMarkRead]);
 

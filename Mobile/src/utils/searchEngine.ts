@@ -53,6 +53,22 @@ export function findLegalIntent(query: string, data: Category[]): LegalIntentMat
   return best;
 }
 
-export function matchLegalIntent(query: string, data: Category[]): Item | null {
-  return findLegalIntent(query, data)?.item ?? null;
+export function searchLegalItems(query: string, data: Category[]): Item[] {
+  if (!query || query.length < 2) return [];
+  
+  const results: { item: Item; score: number }[] = [];
+  
+  for (const category of data) {
+    for (const item of category.items) {
+      const score = scoreItem(query, item);
+      if (score > 10) { // minimum threshold for suggestion
+        results.push({ item, score });
+      }
+    }
+  }
+
+  return results
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(r => r.item);
 }

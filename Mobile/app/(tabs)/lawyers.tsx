@@ -1,5 +1,5 @@
 /**
- * Lawyers directory — fully functional search, advanced filters, sort.
+ * Lawyers directory � fully functional search, advanced filters, sort.
  * Mock DIRECTORY_LAWYERS today; swap for GET /lawyers + pagination later.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -54,7 +54,7 @@ import {
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
 import { useLawyerDataStore } from '../../store/useLawyerDataStore';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// --- Constants ----------------------------------------------------------------
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'rating', label: 'Top Rated' },
@@ -85,17 +85,17 @@ const COURT_OPTIONS: { value: CourtType | 'all'; label: string }[] = [
 
 const PRICE_LABEL: Record<PriceFilter, string> = {
   any: '',
-  under20: 'Under ₹20',
-  under50: 'Under ₹50',
-  '20to50': '₹20–₹50',
-  above50: '₹50+',
+  under20: 'Under ?20',
+  under50: 'Under ?50',
+  '20to50': '?20�?50',
+  above50: '?50+',
 };
 
 const PRICE_OPTIONS: { value: PriceFilter; label: string }[] = [
   { value: 'any', label: 'Any' },
-  { value: 'under20', label: '< ₹20' },
-  { value: 'under50', label: '< ₹50' },
-  { value: 'above50', label: '₹50+' },
+  { value: 'under20', label: '< ?20' },
+  { value: 'under50', label: '< ?50' },
+  { value: 'above50', label: '?50+' },
 ];
 
 type SheetFilters = {
@@ -106,7 +106,7 @@ type SheetFilters = {
   onlineOnly: boolean;
 };
 
-// ─── Filter Sheet ─────────────────────────────────────────────────────────────
+// --- Filter Sheet -------------------------------------------------------------
 
 type FilterSheetProps = {
   visible: boolean;
@@ -186,13 +186,13 @@ function AccordionSection({
 const DISMISS_THRESHOLD = 90;
 
 /**
- * Custom bottom sheet — no external library, runs on web + native.
+ * Custom bottom sheet � no external library, runs on web + native.
  * UX parity with Amazon/Myntra:
- *  • Drag handle at top — pan down > 90 px or velocity > 0.5 → dismiss
- *  • Dim backdrop — tap outside → dismiss
- *  • Quick filters row (not scrollable)
- *  • ⚙️ Advanced accordion sections (scrollable)
- *  • Apply button pinned below ScrollView (never scrolls away)
+ *  � Drag handle at top � pan down > 90 px or velocity > 0.5 ? dismiss
+ *  � Dim backdrop � tap outside ? dismiss
+ *  � Quick filters row (not scrollable)
+ *  � ?? Advanced accordion sections (scrollable)
+ *  � Apply button pinned below ScrollView (never scrolls away)
  */
 const FilterSheet = React.memo(function FilterSheet({
   visible,
@@ -211,7 +211,7 @@ const FilterSheet = React.memo(function FilterSheet({
   const [mounted, setMounted] = useState(false);
   const isClosing  = useRef(false);
 
-  // ── Open / close ──────────────────────────────────────────────────────────
+  // -- Open / close ----------------------------------------------------------
   useEffect(() => {
     if (visible) {
       isClosing.current = false;
@@ -220,22 +220,22 @@ const FilterSheet = React.memo(function FilterSheet({
       slideAnim.setValue(sheetH);
       backdropAnim.setValue(0);
       Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, speed: 22, bounciness: 0 }),
-        Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: false, speed: 22, bounciness: 0 }),
+        Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
       ]).start();
     } else {
       if (isClosing.current) return;
       isClosing.current = true;
       Animated.parallel([
-        Animated.timing(slideAnim, { toValue: sheetH, duration: 220, useNativeDriver: true }),
-        Animated.timing(backdropAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: sheetH, duration: 220, useNativeDriver: false }),
+        Animated.timing(backdropAnim, { toValue: 0, duration: 200, useNativeDriver: false }),
       ]).start(({ finished }) => {
         if (finished) { setMounted(false); dragY.setValue(0); }
       });
     }
   }, [visible, sheetH, dragY, slideAnim, backdropAnim]);
 
-  // ── Drag-to-dismiss via PanResponder on the handle ────────────────────────
+  // -- Drag-to-dismiss via PanResponder on the handle ------------------------
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, { dy, dx }) => dy > 6 && Math.abs(dy) > Math.abs(dx),
@@ -250,17 +250,17 @@ const FilterSheet = React.memo(function FilterSheet({
         if (finalDy > DISMISS_THRESHOLD || vy > 0.5) {
           isClosing.current = true;
           Animated.parallel([
-            Animated.timing(dragY,      { toValue: sheetH, duration: 200, useNativeDriver: true }),
-            Animated.timing(backdropAnim, { toValue: 0,    duration: 200, useNativeDriver: true }),
+            Animated.timing(dragY,      { toValue: sheetH, duration: 200, useNativeDriver: false }),
+            Animated.timing(backdropAnim, { toValue: 0,    duration: 200, useNativeDriver: false }),
           ]).start(({ finished }) => {
             if (finished) { dragY.setValue(0); setMounted(false); onClose(); }
           });
         } else {
-          Animated.spring(dragY, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 8 }).start();
+          Animated.spring(dragY, { toValue: 0, useNativeDriver: false, speed: 20, bounciness: 8 }).start();
         }
       },
       onPanResponderTerminate: () => {
-        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 8 }).start();
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: false, speed: 20, bounciness: 8 }).start();
       },
     }),
   ).current;
@@ -288,7 +288,7 @@ const FilterSheet = React.memo(function FilterSheet({
         style={[StyleSheet.absoluteFillObject, sheetStyles.backdropDim, { opacity: backdropOp }]}
         pointerEvents="none"
       />
-      {/* Tap outside → close */}
+      {/* Tap outside ? close */}
       <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={onClose} activeOpacity={1} accessible={false} />
 
       {/* Sheet */}
@@ -296,13 +296,13 @@ const FilterSheet = React.memo(function FilterSheet({
         style={[sheetStyles.sheet, { height: sheetH, transform: [{ translateY: combinedY }] }]}
         pointerEvents="auto"
       >
-        {/* ── Draggable handle zone — tall hit-target, same as NotificationSheet ── */}
+        {/* -- Draggable handle zone � tall hit-target, same as NotificationSheet -- */}
         <View style={sheetStyles.handleZone} {...panResponder.panHandlers}>
           <View style={sheetStyles.handlePill} />
           <Text style={sheetStyles.dragHint}>drag down to close</Text>
         </View>
 
-        {/* ── Fixed header — also part of drag zone so users can grab it anywhere ── */}
+        {/* -- Fixed header � also part of drag zone so users can grab it anywhere -- */}
         <View style={sheetStyles.sheetHeader} {...panResponder.panHandlers}>
           <Text style={sheetStyles.sheetTitle}>Filters</Text>
           <TouchableOpacity onPress={onClear} hitSlop={12} activeOpacity={0.7}>
@@ -310,40 +310,40 @@ const FilterSheet = React.memo(function FilterSheet({
           </TouchableOpacity>
         </View>
 
-        {/* ── ⭐ Quick filters ── */}
+        {/* -- ? Quick filters -- */}
         <View style={sheetStyles.quickSection}>
-          <Text style={sheetStyles.sectionLabel}>⭐  QUICK FILTERS</Text>
+          <Text style={sheetStyles.sectionLabel}>?  QUICK FILTERS</Text>
           <View style={sheetStyles.quickRow}>
             <TouchableOpacity
               style={[sheetStyles.quickChip, quickRatingActive && sheetStyles.quickChipSel]}
               onPress={() => set('rating', quickRatingActive ? 'any' : '4.5')}
               activeOpacity={0.8}
             >
-              <Text style={[sheetStyles.quickTxt, quickRatingActive && sheetStyles.quickTxtSel]}>⭐ 4.5+</Text>
+              <Text style={[sheetStyles.quickTxt, quickRatingActive && sheetStyles.quickTxtSel]}>? 4.5+</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[sheetStyles.quickChip, pending.onlineOnly && sheetStyles.quickChipOnline]}
               onPress={() => set('onlineOnly', !pending.onlineOnly)}
               activeOpacity={0.8}
             >
-              <Text style={[sheetStyles.quickTxt, pending.onlineOnly && sheetStyles.quickTxtOnline]}>🟢 Online</Text>
+              <Text style={[sheetStyles.quickTxt, pending.onlineOnly && sheetStyles.quickTxtOnline]}>?? Online</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[sheetStyles.quickChip, quickBudgetActive && sheetStyles.quickChipSel]}
               onPress={() => set('price', quickBudgetActive ? 'any' : 'under50')}
               activeOpacity={0.8}
             >
-              <Text style={[sheetStyles.quickTxt, quickBudgetActive && sheetStyles.quickTxtSel]}>💰 Under ₹50</Text>
+              <Text style={[sheetStyles.quickTxt, quickBudgetActive && sheetStyles.quickTxtSel]}>?? Under ?50</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── ⚙️ Advanced section divider ── */}
+        {/* -- ?? Advanced section divider -- */}
         <View style={sheetStyles.sectionDivider}>
-          <Text style={sheetStyles.sectionLabel}>⚙️  ADVANCED FILTERS</Text>
+          <Text style={sheetStyles.sectionLabel}>??  ADVANCED FILTERS</Text>
         </View>
 
-        {/* ── Scrollable accordion ── */}
+        {/* -- Scrollable accordion -- */}
         <ScrollView
           style={sheetStyles.scrollView}
           contentContainerStyle={sheetStyles.sheetScroll}
@@ -375,7 +375,7 @@ const FilterSheet = React.memo(function FilterSheet({
           </View>
         </ScrollView>
 
-        {/* ── Pinned Apply button ── */}
+        {/* -- Pinned Apply button -- */}
         <View style={sheetStyles.applyWrap}>
           <TouchableOpacity style={sheetStyles.applyBtn} onPress={onApply} activeOpacity={0.88}>
             <Text style={sheetStyles.applyTxt}>Apply Filters</Text>
@@ -386,7 +386,7 @@ const FilterSheet = React.memo(function FilterSheet({
   );
 });
 
-// ─── Active Filter Chips ──────────────────────────────────────────────────────
+// --- Active Filter Chips ------------------------------------------------------
 
 type ActiveChip = { id: string; label: string; onRemove: () => void };
 
@@ -419,7 +419,7 @@ const ActiveFilterChips = React.memo(function ActiveFilterChips({ chips, onClear
   );
 });
 
-// ─── Category accent colours ──────────────────────────────────────────────────
+// --- Category accent colours --------------------------------------------------
 
 const CAT_COLORS: Partial<Record<DirectoryCategory, string>> = {
   criminal: '#F85149',
@@ -432,7 +432,7 @@ const CAT_COLORS: Partial<Record<DirectoryCategory, string>> = {
   tax: '#34D399',
 };
 
-// ─── Google-style Suggestions Dropdown ───────────────────────────────────────
+// --- Google-style Suggestions Dropdown ---------------------------------------
 
 const SuggestionsDropdown = React.memo(function SuggestionsDropdown({
   suggestions,
@@ -453,14 +453,14 @@ const SuggestionsDropdown = React.memo(function SuggestionsDropdown({
     Animated.timing(fadeAnim, {
       toValue: visible ? 1 : 0,
       duration: 150,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   }, [visible, fadeAnim]);
 
   if (!visible) return <View pointerEvents="none" style={dd.hidden} />;
 
   return (
-    // No full-screen backdrop — relying on TextInput onBlur + FlatList scroll to close.
+    // No full-screen backdrop � relying on TextInput onBlur + FlatList scroll to close.
     // A backdrop would consume taps on lawyer cards, making them un-tappable while
     // the dropdown is open. Without backdrop: lawyer card taps still fire immediately;
     // dropdown closes automatically when the TextInput loses focus.
@@ -502,7 +502,7 @@ const SuggestionsDropdown = React.memo(function SuggestionsDropdown({
   );
 });
 
-// ─── Scroll-safe Sort + Category Chips ───────────────────────────────────────
+// --- Scroll-safe Sort + Category Chips ---------------------------------------
 // Uses a scroll-state guard so that dragging through chips doesn't accidentally
 // toggle a category. A 50 ms pressIn delay + isScrolling ref together prevent
 // finger-lift / mouse-cursor landing from being treated as an intentional tap.
@@ -568,7 +568,7 @@ const CategoryChipsRow = React.memo(function CategoryChipsRow({
 
   const markScrollEnd = useCallback(() => {
     clearTimeout(scrollEndTimer.current);
-    // Keep guard active for 180 ms after scroll ends — covers the tap fired on finger lift
+    // Keep guard active for 180 ms after scroll ends � covers the tap fired on finger lift
     scrollEndTimer.current = setTimeout(() => { scrolling.current = false; }, 180);
   }, []);
 
@@ -583,7 +583,7 @@ const CategoryChipsRow = React.memo(function CategoryChipsRow({
       onScrollEndDrag={markScrollEnd}
       onMomentumScrollEnd={() => { scrolling.current = false; }}
     >
-      {/* "All" — active only when nothing selected */}
+      {/* "All" � active only when nothing selected */}
       <TouchableOpacity
         style={[styles.chip, selectedCategories.size === 0 && styles.chipSel]}
         onPress={() => { if (!scrolling.current) onClearAll(); }}
@@ -613,7 +613,7 @@ const CategoryChipsRow = React.memo(function CategoryChipsRow({
   );
 });
 
-// ─── Sections Header (working on + recommended + count) ──────────────────────
+// --- Sections Header (working on + recommended + count) ----------------------
 // Sort chips and category chips live in the FIXED top bar (never in FlatList)
 // so they never remount when sort/category state changes.
 
@@ -634,7 +634,7 @@ const SectionsHeader = React.memo(function SectionsHeader({
 }: SectionsHeaderProps) {
   return (
     <>
-      {/* ── Working on your cases ── */}
+      {/* -- Working on your cases -- */}
       {workingOn.length > 0 && (
         <View style={styles.sectionBlock}>
           <View style={styles.sectionLabelRow}>
@@ -655,7 +655,7 @@ const SectionsHeader = React.memo(function SectionsHeader({
         </View>
       )}
 
-      {/* ── Recommended ── */}
+      {/* -- Recommended -- */}
       {recommended.length > 0 && (
         <View style={styles.sectionBlock}>
           <View style={styles.sectionLabelRow}>
@@ -676,7 +676,7 @@ const SectionsHeader = React.memo(function SectionsHeader({
         </View>
       )}
 
-      {/* ── All Lawyers header ── */}
+      {/* -- All Lawyers header -- */}
       <View style={styles.allLawyersHeader}>
         <Text style={styles.sectionTitle}>All Lawyers</Text>
         <View style={styles.countPill}>
@@ -689,7 +689,7 @@ const SectionsHeader = React.memo(function SectionsHeader({
   );
 });
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// --- Main Screen --------------------------------------------------------------
 
 export default function LawyersTabScreen() {
   const router = useRouter();
@@ -709,11 +709,11 @@ export default function LawyersTabScreen() {
     }, [hydrateLawyerData, hydrated, isFirstLoad]),
   );
 
-  // ── Read deep-link param (from Home navigation) ────────────────────────────
+  // -- Read deep-link param (from Home navigation) ----------------------------
   const params = useLocalSearchParams<{ category?: string | string[] }>();
   const rawCategory = Array.isArray(params.category) ? params.category[0] : params.category;
 
-  // ── Zustand store — persists across web navigation remounts ────────────────
+  // -- Zustand store � persists across web navigation remounts ----------------
   // All filter mutations go through the store; NO router.setParams needed.
   const {
     categories: storeCategories,
@@ -733,7 +733,7 @@ export default function LawyersTabScreen() {
     [storeCategories],
   );
 
-  // Seed store from deep-link URL param on first mount (Home → Lawyers)
+  // Seed store from deep-link URL param on first mount (Home ? Lawyers)
   const seededFromURL = useRef(false);
   useEffect(() => {
     if (!seededFromURL.current) {
@@ -753,7 +753,7 @@ export default function LawyersTabScreen() {
   const [pendingSheet, setPendingSheet] = useState<SheetFilters>(storeAppliedSheet);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Sheet open/close — pending sheet is a local copy until "Apply" is tapped
+  // Sheet open/close � pending sheet is a local copy until "Apply" is tapped
   const openSheet = useCallback(() => {
     Keyboard.dismiss();
     setSearchFocused(false);
@@ -785,7 +785,7 @@ export default function LawyersTabScreen() {
   const filtered = useMemo(() => {
     const source = directoryLawyers ?? DIRECTORY_LAWYERS;
     const all = sortDirectoryLawyers(filterDirectoryLawyers(source, directoryFilters), sort);
-    // Deduplicate alt-city rows — show each unique lawyer only once
+    // Deduplicate alt-city rows � show each unique lawyer only once
     const seen = new Set<string>();
     return all.filter((l) => {
       if (seen.has(l.profileId)) return false;
@@ -817,7 +817,7 @@ export default function LawyersTabScreen() {
     return [...rest].sort((a, b) => b.rating - a.rating).slice(0, 5);
   }, [filtered, workingSet, dedupeByProfileId]);
 
-  // Active filter chips — sheet filters only (categories shown as chip pills above)
+  // Active filter chips � sheet filters only (categories shown as chip pills above)
   const activeFilterCount = useMemo(() => {
     let n = 0;
     if (storeAppliedSheet.rating !== 'any') n++;
@@ -831,7 +831,7 @@ export default function LawyersTabScreen() {
   const activeChips = useMemo<ActiveChip[]>(() => {
     const chips: ActiveChip[] = [];
     if (storeAppliedSheet.rating !== 'any') {
-      chips.push({ id: 'rating', label: `${storeAppliedSheet.rating}+ ★`, onRemove: () => setAppliedSheet({ ...storeAppliedSheet, rating: 'any' }) });
+      chips.push({ id: 'rating', label: `${storeAppliedSheet.rating}+ ?`, onRemove: () => setAppliedSheet({ ...storeAppliedSheet, rating: 'any' }) });
     }
     if (storeAppliedSheet.price !== 'any') {
       chips.push({ id: 'price', label: PRICE_LABEL[storeAppliedSheet.price], onRemove: () => setAppliedSheet({ ...storeAppliedSheet, price: 'any' }) });
@@ -843,7 +843,7 @@ export default function LawyersTabScreen() {
       chips.push({ id: 'court', label: COURT_TYPE_LABEL[storeAppliedSheet.courtType as CourtType], onRemove: () => setAppliedSheet({ ...storeAppliedSheet, courtType: 'all' }) });
     }
     if (storeAppliedSheet.onlineOnly) {
-      chips.push({ id: 'online', label: '🟢 Online', onRemove: () => setAppliedSheet({ ...storeAppliedSheet, onlineOnly: false }) });
+      chips.push({ id: 'online', label: '?? Online', onRemove: () => setAppliedSheet({ ...storeAppliedSheet, onlineOnly: false }) });
     }
     return chips;
   }, [storeAppliedSheet, setAppliedSheet]);
@@ -881,8 +881,8 @@ export default function LawyersTabScreen() {
 
   const onRowPress = useCallback(
     (profileId: string) => {
-      // Use direct path string — more reliable than template params in Expo Router
-      router.push(`/lawyer/${profileId}` as any);
+      // Use direct path string � more reliable than template params in Expo Router
+      router.push({ pathname: '/lawyer/[id]', params: { id: profileId } } as any);
     },
     [router],
   );
@@ -898,7 +898,7 @@ export default function LawyersTabScreen() {
 
   const keyExtractor = useCallback((item: DirectoryLawyer) => item.id, []);
 
-  // ── Smart search / autocomplete ───────────────────────────────────────────
+  // -- Smart search / autocomplete -------------------------------------------
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [dropdownTopOffset, setDropdownTopOffset] = useState(110);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -922,7 +922,7 @@ export default function LawyersTabScreen() {
   }, [setSearch]);
 
   const onSuggestionSelect = useCallback((s: SearchSuggestion) => {
-    // Always dismiss keyboard and clear input — Google-like feel
+    // Always dismiss keyboard and clear input � Google-like feel
     Keyboard.dismiss();
     setSearchFocused(false);
     setSearch('');
@@ -981,7 +981,7 @@ export default function LawyersTabScreen() {
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.safeTop} />
 
-      {/* ── Fixed top bar: title + smart search bar + active chips ── */}
+      {/* -- Fixed top bar: title + smart search bar + active chips -- */}
       <View
         style={styles.fixedTop}
         onLayout={(e) => setDropdownTopOffset(e.nativeEvent.layout.height)}
@@ -1058,10 +1058,10 @@ export default function LawyersTabScreen() {
           onClearAll={clearAllFilters}
         />
 
-        {/* ── Sort chips (scroll-safe) ── */}
+        {/* -- Sort chips (scroll-safe) -- */}
         <SortChipsRow sort={sort} onSortChange={setSort} />
 
-        {/* ── Category chips: multi-select, scroll-safe ── */}
+        {/* -- Category chips: multi-select, scroll-safe -- */}
         <CategoryChipsRow
           selectedCategories={selectedCategories}
           onToggle={toggleCategory}
@@ -1069,7 +1069,7 @@ export default function LawyersTabScreen() {
         />
       </View>
 
-      {/* ── Scrollable content ── */}
+      {/* -- Scrollable content -- */}
       <FlatList
         data={filtered}
         keyExtractor={keyExtractor}
@@ -1087,7 +1087,7 @@ export default function LawyersTabScreen() {
         onScrollBeginDrag={() => setSearchFocused(false)}
       />
 
-      {/* ── Autocomplete dropdown (absolute, over FlatList) ── */}
+      {/* -- Autocomplete dropdown (absolute, over FlatList) -- */}
       <SuggestionsDropdown
         suggestions={suggestions}
         onSelect={onSuggestionSelect}
@@ -1096,7 +1096,7 @@ export default function LawyersTabScreen() {
         topOffset={dropdownTopOffset}
       />
 
-      {/* ── Filter sheet ── */}
+      {/* -- Filter sheet -- */}
       <FilterSheet
         visible={sheetOpen}
         pending={pendingSheet}
@@ -1109,7 +1109,7 @@ export default function LawyersTabScreen() {
   );
 }
 
-// ─── Main Styles ──────────────────────────────────────────────────────────────
+// --- Main Styles --------------------------------------------------------------
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bgPrimary, overflow: 'hidden' },
@@ -1254,7 +1254,7 @@ const styles = StyleSheet.create({
   emptyBtnTxt: { fontSize: 14, fontWeight: '700', color: Colors.primary },
 });
 
-// ─── Sheet Styles ─────────────────────────────────────────────────────────────
+// --- Sheet Styles -------------------------------------------------------------
 
 const sheetStyles = StyleSheet.create({
   backdropDim: { backgroundColor: 'rgba(0,0,0,0.6)' },
@@ -1357,7 +1357,7 @@ const sheetStyles = StyleSheet.create({
   applyTxt: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
 });
 
-// ─── Dropdown Styles ──────────────────────────────────────────────────────────
+// --- Dropdown Styles ----------------------------------------------------------
 
 const dd = StyleSheet.create({
   hidden: { width: 0, height: 0 },

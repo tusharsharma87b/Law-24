@@ -481,8 +481,8 @@ const StarRating = memo(function StarRating({
   const tapStar = useCallback((idx: number) => {
     onChange(idx + 1);
     Animated.sequence([
-      Animated.spring(scales[idx], { toValue: 1.14, useNativeDriver: true, speed: 35, bounciness: 10 }),
-      Animated.spring(scales[idx], { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }),
+      Animated.spring(scales[idx], { toValue: 1.14, useNativeDriver: false, speed: 35, bounciness: 10 }),
+      Animated.spring(scales[idx], { toValue: 1, useNativeDriver: false, speed: 30, bounciness: 8 }),
     ]).start();
   }, [onChange, scales]);
   return (
@@ -762,7 +762,7 @@ export default function LawyerProfileScreen() {
   }, []);
 
   const handleSave = useCallback(() => {
-    if (saveBusy) return;
+    if (!lawyer || saveBusy) return;
     setSaveBusy(true);
     const nextSaved = !saved;
     setSaved(nextSaved);
@@ -772,10 +772,10 @@ export default function LawyerProfileScreen() {
       nextSaved ? 'Added to your saved lawyers' : 'Removed from saved list',
     );
     setTimeout(() => setSaveBusy(false), 500);
-  }, [lawyer.id, saveBusy, saved]);
+  }, [lawyer?.id, saveBusy, saved]);
 
   const handleShare = useCallback(async () => {
-    if (shareBusy) return;
+    if (!lawyer || shareBusy) return;
     setShareBusy(true);
     try {
       await Share.share({
@@ -786,10 +786,10 @@ export default function LawyerProfileScreen() {
     } finally {
       setTimeout(() => setShareBusy(false), 500);
     }
-  }, [lawyer.name, lawyer.priceChatPerMin, lawyer.specializations, shareBusy]);
+  }, [lawyer?.name, lawyer?.priceChatPerMin, lawyer?.specializations, shareBusy]);
 
   const handleConfirmBooking = useCallback(() => {
-    if (bookingBusy) return;
+    if (!lawyer || bookingBusy) return;
     setBookingBusy(true);
     setShowBooking(false);
     Alert.alert('Booked', 'Your consultation has been scheduled for tomorrow.');
@@ -799,13 +799,13 @@ export default function LawyerProfileScreen() {
       time: selectedTime,
     });
     setTimeout(() => setBookingBusy(false), 500);
-  }, [bookingBusy, lawyer.id, selectedTime]);
+  }, [bookingBusy, lawyer?.id, selectedTime]);
 
   const closeBookingSheet = useCallback(() => {
     Animated.timing(bookingTranslateY, {
       toValue: SCREEN_HEIGHT,
       duration: 200,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start(() => {
       setShowBooking(false);
       bookingTranslateY.setValue(0);
@@ -826,7 +826,7 @@ export default function LawyerProfileScreen() {
         } else {
           Animated.spring(bookingTranslateY, {
             toValue: 0,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }).start();
         }
       },
@@ -839,10 +839,25 @@ export default function LawyerProfileScreen() {
       Animated.timing(bookingTranslateY, {
         toValue: 0,
         duration: 250,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start();
     }
   }, [bookingTranslateY, showBooking]);
+
+  if (!id) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: Colors.textSecondary }}>Invalid Lawyer ID</Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20 }}>
+          <Text style={{ color: Colors.primary }}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!normalizedId) {
+    return <EmptyState message="Invalid lawyer profile ID. No ID provided." />;
+  }
 
   if (!lawyer) {
     return <EmptyState message="No lawyer data available for this profile." />;

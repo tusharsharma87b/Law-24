@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -82,23 +82,19 @@ export default function SmartLegalSearchScreen() {
     return DIRECTORY_LAWYERS.filter((l) => l.category === cat).slice(0, 4);
   }, [ai]);
 
-  if (!ai) {
-    return (
-      <View style={s.root}>
-        <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.bgPrimary }} />
-        <View style={s.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn} hitSlop={10}>
-            <MaterialIcons name="arrow-back" size={22} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={s.topTitle}>Smart legal search</Text>
-        </View>
-        <View style={s.emptyWrap}>
-          <Text style={s.emptyTitle}>No results found. Try a different query.</Text>
-          <Text style={s.emptySub}>Please go back and submit another search.</Text>
-        </View>
-      </View>
-    );
-  }
+  // No AI data ó redirect to NyayaAI with the user's query instead of dead-end screen.
+  useEffect(() => {
+    if (!ai) {
+      const fallback = (aiPrompt || query || title).trim();
+      router.replace(
+        fallback
+          ? ({ pathname: '/nyaya', params: { query: fallback, autoSend: '1' } } as any)
+          : ({ pathname: '/nyaya' } as any)
+      );
+    }
+  }, [ai]);
+
+  if (!ai) return null;
 
   return (
     <View style={s.root}>
@@ -109,7 +105,7 @@ export default function SmartLegalSearchScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.topTitle}>Smart legal search</Text>
-          <Text style={s.queryEcho} numberOfLines={2}>‚Äú{query}‚Äù</Text>
+          <Text style={s.queryEcho} numberOfLines={2}>"{query}"</Text>
         </View>
       </View>
 
@@ -176,12 +172,12 @@ export default function SmartLegalSearchScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.lawyerName}>{lawyer.name}</Text>
                 <Text style={s.lawyerMeta}>
-                  {lawyer.specialization ? `${lawyer.specialization} ¬∑ ` : ''}‚òÖ{lawyer.rating} ¬∑ {lawyer.city}
+                  {lawyer.specialization ? `${lawyer.specialization} ∑ ` : ''}?{lawyer.rating} ∑ {lawyer.city}
                 </Text>
               </View>
               <TouchableOpacity
                 style={s.consultBtn}
-                onPress={() => router.push({ pathname: '/lawyer/[id]', params: { id: lawyer.id } })}
+                onPress={() => router.push({ pathname: '/lawyer/[id]', params: { id: lawyer.id } } as any)}
                 activeOpacity={0.85}
               >
                 <Text style={s.consultTxt}>Consult</Text>
@@ -319,7 +315,4 @@ const s = StyleSheet.create({
   ctaTxt: { color: '#fff', fontSize: 12, fontWeight: '700' },
   relatedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   relatedTxt: { color: Colors.primary, fontSize: 13, fontWeight: '600', flex: 1 },
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  emptyTitle: { color: Colors.textPrimary, fontSize: 18, fontWeight: '800' },
-  emptySub: { color: Colors.textSecondary, fontSize: 13 },
 });
