@@ -16,14 +16,10 @@ import {
   BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
-import { LawyerCard, mapLawyerToCardModel } from '../../components/lawyer/LawyerCard';
-import { HOME_LEGAL_CATEGORIES } from '../../constants/homeLegalCategories';
-import { MOCK_LAWYERS } from '../../constants/mockData';
-import { DIRECTORY_LAWYERS } from '../../constants/lawyersDirectory';
+import { LAWYERS } from '../../data/lawyers';
 import { useAuthStore } from '../../store/useAuthStore';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { resolveSearchIntent, SEARCH_PLACEHOLDERS } from '../../constants/searchIntentMap';
@@ -82,6 +78,15 @@ export default function HomeScreen() {
 
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  
+  const HOME_LEGAL_CATEGORIES = [
+    { id: "1", title: "Police / FIR", type: "Criminal", icon: "gavel" },
+    { id: "2", title: "Family / Divorce", type: "Family", icon: "people" },
+    { id: "3", title: "Property Dispute", type: "Property", icon: "home" },
+    { id: "4", title: "Job Issues", type: "Employment", icon: "briefcase" }
+  ];
+
+  if (!HOME_LEGAL_CATEGORIES) return null;
   const unreadCount = useUnreadCount();
   const { balance } = useWalletStore();
   const [notifSheetOpen, setNotifSheetOpen] = useState(false);
@@ -95,8 +100,8 @@ export default function HomeScreen() {
   const [activeTopRated, setActiveTopRated] = useState(0);
   const [activeCategory, setActiveCategory] = useState(0);
 
-  const liveExperts = (featuredLawyers || MOCK_LAWYERS).filter((l) => l.isOnline);
-  const topRated = [...(featuredLawyers || MOCK_LAWYERS)].sort((a, b) => b.rating.average - a.rating.average);
+  const liveExperts = LAWYERS.filter((l) => l.isOnline);
+  const topRated = [...LAWYERS].sort((a, b) => b.rating - a.rating);
 
   const [searchText, setSearchText] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -111,6 +116,11 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Reset search state on focus
+      setSearchText('');
+      setSuggestions([]);
+      setShowDropdown(false);
+
       if (!hydrated) {
         hydrateLawyerData();
       } else if (isFirstLoad) {
@@ -142,382 +152,380 @@ export default function HomeScreen() {
     router.push({ pathname: '/nyaya', params: { query: selectedSug.display, autoSend: '1' } });
   };
 
-  const handleSelectSmartResult = (item: Item) => {
-    setShowDropdown(false);
-    setSearchText('');
+  const handleCategoryPress = (item: any) => {
     router.push({
-      pathname: '/nyaya',
-      params: { 
-        query: item.title,
-        aiPrompt: item.aiPrompt,
-        autoSend: '1'
-      }
+      pathname: "/(tabs)/lawyers",
+      params: { category: item.type },
+    });
+  };
+
+  const handleSearch = (query: string) => {
+    if (!query) return;
+    setSearchText(query);
+    setShowDropdown(false);
+    router.push({
+      pathname: '/legal-insight',
+      params: { query },
     });
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={s.root}>
-        <SafeAreaView edges={['top']} style={s.fixedTop}>
-          <View style={s.header}>
-            <Text style={s.logo}>
-              Law<Text style={s.logoAccent}>24</Text>
-            </Text>
-            <View style={s.headerIcons}>
-              <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/profile/add-money')} activeOpacity={0.7}>
-                <MaterialIcons name="account-balance-wallet" size={20} color={Colors.gold} />
-                <Text style={s.walletAmt}>₹{balance.toLocaleString('en-IN')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.iconBtn} onPress={() => setNotifSheetOpen(true)} activeOpacity={0.7}>
-                <MaterialIcons name="notifications-none" size={22} color={Colors.textPrimary} />
-                {unreadCount > 0 && (
-                  <View style={s.bellBadge}>
-                    <Text style={s.bellBadgeTxt}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={[s.searchRow, showDropdown && s.searchRowFocused]}>
-            <MaterialIcons name="search" size={20} color={showDropdown ? Colors.primary : Colors.textTertiary} />
-            <View style={s.searchInputWrap}>
-              {!searchText && <Text style={s.searchPlaceholder}>{SEARCH_PLACEHOLDERS[0]}</Text>}
-              <TextInput
-                style={s.searchInput}
-                value={searchText}
-                onChangeText={(t) => {
-                  setSearchText(t);
-                  const sugs = generateSuggestions(t);
-                  const smrts = searchLegalItems(t, LEGAL_SYSTEM);
-                  setSuggestions(sugs);
-                  setSmartResults(smrts);
-                  const hasSomething = sugs.length > 0 || smrts.length > 0;
-                  setShowDropdown(hasSomething);
-                  Animated.timing(dropFade, { toValue: hasSomething ? 1 : 0, duration: 200, useNativeDriver: false }).start();
-                }}
-                onFocus={() => {
-                  if (suggestions.length > 0) {
-                    setShowDropdown(true);
-                    Animated.timing(dropFade, { toValue: 1, duration: 200, useNativeDriver: false }).start();
-                  }
-                }}
-                placeholderTextColor="transparent"
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-            </View>
-            <TouchableOpacity style={s.micBtn}>
-              <MaterialIcons name="mic-none" size={20} color={Colors.textTertiary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Smart Search Dropdown */}
-          {showDropdown && (
-            <Animated.View style={[s.dropdown, { opacity: dropFade }]}>
-              <ScrollView keyboardShouldPersistTaps="handled">
-                {smartResults.map((item, idx) => (
-                  <TouchableOpacity 
-                    key={`smart-${idx}`} 
-                    style={s.dropItem}
-                    onPress={() => handleSelectSmartResult(item)}
-                  >
-                    <View style={s.dropIcon}>
-                      <MaterialIcons name="auto-awesome" size={16} color={Colors.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.dropTitle}>{item.title}</Text>
-                      <Text style={s.dropDesc} numberOfLines={1}>{item.description}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                {suggestions.map((sug, idx) => (
-                  <TouchableOpacity 
-                    key={`sug-${idx}`} 
-                    style={s.dropItem}
-                    onPress={() => openRouteSheet(sug)}
-                  >
-                    <MaterialIcons name="search" size={16} color={Colors.textTertiary} style={{ marginRight: 12 }} />
-                    <Text style={s.dropText}>{sug.display}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </Animated.View>
-          )}
-        </SafeAreaView>
-
-        <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-          <Text style={s.greeting}>
-            {getGreeting()}, {user?.name?.split(' ')[0] ?? 'there'}
-          </Text>
-
-          <View style={s.section}>
-            <SectionHeader title="Top Categories" onAction={() => router.push('/legal-categories')} />
-            <Animated.FlatList
-              data={HOME_LEGAL_CATEGORIES}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={s.catListFullBleed}
-              contentContainerStyle={s.catListContainer}
-              onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: categoryScrollX } } }], {
-                useNativeDriver: false,
-              })}
-              scrollEventThrottle={16}
-              renderItem={({ item, index }) => {
-                const inputRange = [(index - 1) * 100, index * 100, (index + 1) * 100];
-                const scale = categoryScrollX.interpolate({ inputRange, outputRange: [0.95, 1, 0.95], extrapolate: 'clamp' });
-                const opacity = categoryScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
-
-                return (
-                  <Animated.View
-                    style={[
-                      s.catCardWrap,
-                      {
-                        width: categoryCardWidth,
-                        opacity,
-                        transform: [{ scale }],
-                      },
-                      index === activeCategory && s.activeGlow,
-                    ]}
-                  >
-                    <TouchableOpacity
-                      style={[s.catCard, { height: categoryCardHeight }]}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        const categoryId = SYSTEM_CATEGORY_BY_LAWYER_CATEGORY[item.categoryParam] ?? 'civil-law';
-                        router.push({ pathname: '/categories/[id]', params: { id: categoryId } } as any);
-                      }}
-                    >
-                      <View style={[s.catIcon, { backgroundColor: item.color + '22' }]}>
-                        <MaterialIcons name={item.icon as any} size={18} color={item.color} />
-                      </View>
-                      <Text style={s.catLabel} numberOfLines={2}>
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  </Animated.View>
-                );
-              }}
-            />
-          </View>
-
-          {/* Nyaya AI Premium Card */}
-          <View style={s.nyayaCard}>
-            <LinearGradient
-              colors={['#1E293B', '#0F172A']}
-              style={s.nyayaGradient}
-            >
-              <View style={s.nyayaHeader}>
-                <View style={s.nyayaIconWrap}>
-                  <MaterialIcons name="auto-awesome" size={24} color={Colors.gold} />
-                </View>
-                <View>
-                  <Text style={s.nyayaTitle}>NyayaAI</Text>
-                  <Text style={s.nyayaTag}>Advanced Legal Intelligence</Text>
-                </View>
-              </View>
-              
-              <Text style={s.nyayaDesc}>
-                Describe your legal problem in Hindi or English. We help you understand your rights and next steps instantly.
+    <TouchableWithoutFeedback onPress={() => {
+      Keyboard.dismiss();
+      setShowDropdown(false);
+    }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: Colors.bgPrimary }}>
+        <View style={s.root}>
+          {/* HEADER & SEARCH (FIXED TOP) */}
+          <View style={s.fixedTop}>
+            <View style={s.header}>
+              <Text style={s.logo}>
+                Law<Text style={s.logoAccent}>24</Text>
               </Text>
-
-              <View style={s.nyayaPoints}>
-                <View style={s.nyayaPoint}>
-                  <MaterialIcons name="check-circle" size={14} color={Colors.success} />
-                  <Text style={s.nyayaPointTxt}>Understand your situation clearly</Text>
-                </View>
-                <View style={s.nyayaPoint}>
-                  <MaterialIcons name="check-circle" size={14} color={Colors.success} />
-                  <Text style={s.nyayaPointTxt}>Know your legal rights</Text>
-                </View>
-                <View style={s.nyayaPoint}>
-                  <MaterialIcons name="check-circle" size={14} color={Colors.success} />
-                  <Text style={s.nyayaPointTxt}>Get actionable next steps</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity 
-                style={s.nyayaBtn} 
-                onPress={() => router.push('/nyaya')}
-                activeOpacity={0.8}
-              >
-                <Text style={s.nyayaBtnTxt}>Start Case Analysis</Text>
-                <MaterialIcons name="arrow-forward" size={18} color="#fff" />
-              </TouchableOpacity>
-            </LinearGradient>
-          </View>
-
-          <View style={s.section}>
-            <SectionHeader title="Live Experts" onAction={() => openLawyers()} />
-            <Animated.FlatList
-              data={liveExperts}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={s.listFullBleed}
-              contentContainerStyle={s.listContainer}
-              snapToAlignment="start"
-              decelerationRate="fast"
-              snapToInterval={expertCardWidth + listGap}
-              bounces={false}
-              removeClippedSubviews
-              initialNumToRender={5}
-              windowSize={5}
-              ListFooterComponent={<View style={{ width: 16 }} />}
-              getItemLayout={(_, index) => ({
-                length: expertCardWidth + listGap,
-                offset: (expertCardWidth + listGap) * index,
-                index,
-              })}
-              onMomentumScrollEnd={(e) => {
-                const idx = Math.round(e.nativeEvent.contentOffset.x / (expertCardWidth + listGap));
-                setActiveExpert(Math.max(0, idx));
-              }}
-              onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: expertsScrollX } } }], { useNativeDriver: false })}
-              scrollEventThrottle={16}
-              renderItem={({ item, index }) => {
-                const inputRange = [
-                  (index - 1) * (expertCardWidth + listGap),
-                  index * (expertCardWidth + listGap),
-                  (index + 1) * (expertCardWidth + listGap),
-                ];
-                const scale = expertsScrollX.interpolate({
-                  inputRange,
-                  outputRange: [0.9, 1.05, 0.9],
-                  extrapolate: 'clamp',
-                });
-                const opacity = expertsScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
-
-                return (
-                  <Animated.View
-                    style={[
-                      s.expertCard,
-                      { width: expertCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
-                      index === activeExpert && s.activeGlow,
-                    ]}
-                  >
-                    <LawyerCard
-                      data={mapLawyerToCardModel(item)}
-                      onPress={() => {
-                        preloadLawyerData(item.id);
-                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } } as any);
-                      }}
-                      ctaLabel="Talk Now"
-                    />
-                  </Animated.View>
-                );
-              }}
-            />
-          </View>
-
-          <View style={s.section}>
-            <SectionHeader title="Top Rated" onAction={() => openLawyers()} />
-            <Animated.FlatList
-              data={topRated}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={s.listFullBleed}
-              contentContainerStyle={s.listContainer}
-              snapToAlignment="start"
-              decelerationRate="fast"
-              snapToInterval={topCardWidth + listGap}
-              bounces={false}
-              removeClippedSubviews
-              initialNumToRender={5}
-              windowSize={5}
-              ListFooterComponent={<View style={{ width: 16 }} />}
-              getItemLayout={(_, index) => ({
-                length: topCardWidth + listGap,
-                offset: (topCardWidth + listGap) * index,
-                index,
-              })}
-              onMomentumScrollEnd={(e) => {
-                const idx = Math.round(e.nativeEvent.contentOffset.x / (topCardWidth + listGap));
-                setActiveTopRated(Math.max(0, idx));
-              }}
-              onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: topRatedScrollX } } }], { useNativeDriver: false })}
-              scrollEventThrottle={16}
-              renderItem={({ item, index }) => {
-                const inputRange = [
-                  (index - 1) * (topCardWidth + listGap),
-                  index * (topCardWidth + listGap),
-                  (index + 1) * (topCardWidth + listGap),
-                ];
-                const scale = topRatedScrollX.interpolate({ inputRange, outputRange: [0.9, 1.05, 0.9], extrapolate: 'clamp' });
-                const opacity = topRatedScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
-
-                return (
-                  <Animated.View
-                    style={[
-                      s.topCard,
-                      { width: topCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
-                      index === activeTopRated && s.activeGlow,
-                    ]}
-                  >
-                    <LawyerCard
-                      data={mapLawyerToCardModel(item)}
-                      onPress={() => {
-                        preloadLawyerData(item.id);
-                        router.push({ pathname: '/lawyer/[id]', params: { id: item.id } } as any);
-                      }}
-                      ctaLabel="Consult"
-                    />
-                  </Animated.View>
-                );
-              }}
-            />
-          </View>
-
-          <View style={{ height: 100 }} />
-        </ScrollView>
-
-        {(showDropdown || suggestions.length > 0) && (
-          <Animated.View
-            style={[
-              s.dropWrap,
-              { top: fixedTopH, opacity: dropFade, pointerEvents: showDropdown ? 'auto' : 'none' } as any,
-            ]}
-          >
-            {suggestions.map((sug, idx) => {
-              const accent = sug.category ? (CAT_ACCENT[sug.category] ?? Colors.primary) : Colors.primary;
-              return (
-                <TouchableOpacity
-                  key={sug.id}
-                  style={[s.dropRow, idx < suggestions.length - 1 && s.dropRowBorder]}
-                  onPress={() => openRouteSheet(sug)}
-                  activeOpacity={0.75}
-                >
-                  <View style={[s.dropIcon, { backgroundColor: accent + '1A' }]}>
-                    <MaterialIcons name={sug.icon as any} size={13} color={accent} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={s.dropDisplay} numberOfLines={1}>
-                      {sug.display}
-                    </Text>
-                    {sug.sub ? (
-                      <Text style={s.dropSub} numberOfLines={1}>
-                        {sug.sub}
-                      </Text>
-                    ) : null}
-                  </View>
-                  {sug.category ? (
-                    <View style={[s.dropCat, { backgroundColor: accent + '18' }]}>
-                      <Text style={[s.dropCatTxt, { color: accent }]}>{sug.category}</Text>
+              <View style={s.headerIcons}>
+                <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/profile/add-money')} activeOpacity={0.7}>
+                  <MaterialIcons name="account-balance-wallet" size={20} color={Colors.gold} />
+                  <Text style={s.walletAmt}>₹{balance.toLocaleString('en-IN')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.iconBtn} onPress={() => setNotifSheetOpen(true)} activeOpacity={0.7}>
+                  <MaterialIcons name="notifications-none" size={22} color={Colors.textPrimary} />
+                  {unreadCount > 0 && (
+                    <View style={s.bellBadge}>
+                      <Text style={s.bellBadgeTxt}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
                     </View>
-                  ) : (
-                    <MaterialIcons name="north-west" size={12} color={Colors.textTertiary} />
                   )}
                 </TouchableOpacity>
-              );
-            })}
-          </Animated.View>
-        )}
+              </View>
+            </View>
 
-        {routeSheetMounted &&
-          selectedSug &&
-          (() => {
+            <View style={[s.searchRow, showDropdown && s.searchRowFocused]}>
+              <MaterialIcons name="search" size={20} color={showDropdown ? Colors.primary : Colors.textTertiary} />
+              <View style={s.searchInputWrap}>
+                {!searchText && <Text style={s.searchPlaceholder}>{SEARCH_PLACEHOLDERS[0]}</Text>}
+                <TextInput
+                  style={s.searchInput}
+                  value={searchText}
+                  onChangeText={(t) => {
+                    setSearchText(t);
+                    const sugs = generateSuggestions(t);
+                    const smrts = searchLegalItems(t, LEGAL_SYSTEM || []);
+                    setSuggestions(sugs || []);
+                    setSmartResults(smrts || []);
+                    const hasSomething = (sugs?.length > 0) || (smrts?.length > 0);
+                    setShowDropdown(hasSomething);
+                    Animated.timing(dropFade, { toValue: hasSomething ? 1 : 0, duration: 200, useNativeDriver: false }).start();
+                  }}
+                  onFocus={() => {
+                    if (suggestions.length > 0 || smartResults.length > 0) {
+                      setShowDropdown(true);
+                      Animated.timing(dropFade, { toValue: 1, duration: 200, useNativeDriver: false }).start();
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowDropdown(false), 150);
+                  }}
+                  placeholderTextColor="transparent"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  autoFocus={false}
+                  blurOnSubmit={false}
+                  returnKeyType="search"
+                  onSubmitEditing={() => handleSearch(searchText)}
+                />
+              </View>
+              <TouchableOpacity style={s.micBtn}>
+                <MaterialIcons name="mic-none" size={20} color={Colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* MAIN SCROLLABLE CONTENT */}
+          <ScrollView 
+            style={s.scroll} 
+            contentContainerStyle={s.content} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={s.greeting}>
+              {getGreeting()}, {user?.name?.split(' ')[0] ?? 'there'}
+            </Text>
+
+            <View style={s.section}>
+              <SectionHeader title="Top Categories" onAction={() => router.push('/legal-categories')} />
+              <Animated.FlatList
+                data={HOME_LEGAL_CATEGORIES}
+                keyExtractor={(item) => item.id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={s.catListFullBleed}
+                contentContainerStyle={s.catListContainer}
+                onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: categoryScrollX } } }], {
+                  useNativeDriver: false,
+                })}
+                scrollEventThrottle={16}
+                renderItem={({ item, index }) => {
+                  const inputRange = [(index - 1) * 100, index * 100, (index + 1) * 100];
+                  const scale = categoryScrollX.interpolate({ inputRange, outputRange: [0.95, 1, 0.95], extrapolate: 'clamp' });
+                  const opacity = categoryScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
+
+                  return (
+                    <Animated.View
+                      style={[
+                        s.catCardWrap,
+                        {
+                          width: categoryCardWidth,
+                          opacity,
+                          transform: [{ scale }],
+                        },
+                        index === activeCategory && s.activeGlow,
+                      ]}
+                    >
+                      <TouchableOpacity
+                        style={[s.catCard, { height: categoryCardHeight }]}
+                        activeOpacity={0.8}
+                        onPress={() => handleCategoryPress(item)}
+                      >
+                        <View style={[s.catIcon, { backgroundColor: '#4F46E522' }]}>
+                          <MaterialIcons name={item.icon as any} size={18} color="#4F46E5" />
+                        </View>
+                        <Text style={s.catLabel} numberOfLines={2}>
+                          {item.title}
+                        </Text>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  );
+                }}
+              />
+            </View>
+
+            {/* Nyaya AI Premium Card */}
+            <View style={s.nyayaCard}>
+              <LinearGradient
+                colors={['#1E293B', '#0F172A']}
+                style={s.nyayaGradient}
+              >
+                <View style={s.nyayaHeader}>
+                  <View style={s.nyayaIconWrap}>
+                    <MaterialIcons name="auto-awesome" size={24} color={Colors.gold} />
+                  </View>
+                  <View>
+                    <Text style={s.nyayaTitle}>NyayaAI</Text>
+                    <Text style={s.nyayaTag}>Advanced Legal Intelligence</Text>
+                  </View>
+                </View>
+                
+                <Text style={s.nyayaDesc}>
+                  Describe your legal problem in Hindi or English. We help you understand your rights and next steps instantly.
+                </Text>
+
+                <View style={s.nyayaPoints}>
+                  <View style={s.nyayaPoint}>
+                    <MaterialIcons name="check-circle" size={14} color={Colors.success} />
+                    <Text style={s.nyayaPointTxt}>Understand your situation clearly</Text>
+                  </View>
+                  <View style={s.nyayaPoint}>
+                    <MaterialIcons name="check-circle" size={14} color={Colors.success} />
+                    <Text style={s.nyayaPointTxt}>Know your legal rights</Text>
+                  </View>
+                  <View style={s.nyayaPoint}>
+                    <MaterialIcons name="check-circle" size={14} color={Colors.success} />
+                    <Text style={s.nyayaPointTxt}>Get actionable next steps</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity 
+                  style={s.nyayaBtn} 
+                  onPress={() => router.push('/nyaya')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={s.nyayaBtnTxt}>Start Case Analysis</Text>
+                  <MaterialIcons name="arrow-forward" size={18} color="#fff" />
+                </TouchableOpacity>
+              </LinearGradient>
+            </View>
+
+            <View style={s.section}>
+              <SectionHeader title="Live Experts" onAction={() => openLawyers()} />
+              <Animated.FlatList
+                data={liveExperts}
+                keyExtractor={(item) => item.id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={s.listFullBleed}
+                contentContainerStyle={s.listContainer}
+                snapToAlignment="start"
+                decelerationRate="fast"
+                snapToInterval={expertCardWidth + listGap}
+                bounces={false}
+                removeClippedSubviews
+                initialNumToRender={5}
+                windowSize={5}
+                ListFooterComponent={<View style={{ width: 16 }} />}
+                getItemLayout={(_, index) => ({
+                  length: expertCardWidth + listGap,
+                  offset: (expertCardWidth + listGap) * index,
+                  index,
+                })}
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / (expertCardWidth + listGap));
+                  setActiveExpert(Math.max(0, idx));
+                }}
+                onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: expertsScrollX } } }], { useNativeDriver: false })}
+                scrollEventThrottle={16}
+                renderItem={({ item, index }) => {
+                  const inputRange = [
+                    (index - 1) * (expertCardWidth + listGap),
+                    index * (expertCardWidth + listGap),
+                    (index + 1) * (expertCardWidth + listGap),
+                  ];
+                  const scale = expertsScrollX.interpolate({
+                    inputRange,
+                    outputRange: [0.9, 1.05, 0.9],
+                    extrapolate: 'clamp',
+                  });
+                  const opacity = expertsScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
+
+                  return (
+                    <Animated.View
+                      style={[
+                        s.expertCard,
+                        { width: expertCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
+                        index === activeExpert && s.activeGlow,
+                      ]}
+                    >
+                      <LawyerCard
+                        lawyer={item}
+                        onPress={() => {
+                          router.push({ pathname: '/lawyer/[id]', params: { id: String(item.id) } });
+                        }}
+                      />
+                    </Animated.View>
+                  );
+                }}
+              />
+            </View>
+
+            <View style={s.section}>
+              <SectionHeader title="Top Rated" onAction={() => openLawyers()} />
+              <Animated.FlatList
+                data={topRated}
+                keyExtractor={(item) => item.id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={s.listFullBleed}
+                contentContainerStyle={s.listContainer}
+                snapToAlignment="start"
+                decelerationRate="fast"
+                snapToInterval={topCardWidth + listGap}
+                bounces={false}
+                removeClippedSubviews
+                initialNumToRender={5}
+                windowSize={5}
+                ListFooterComponent={<View style={{ width: 16 }} />}
+                getItemLayout={(_, index) => ({
+                  length: topCardWidth + listGap,
+                  offset: (topCardWidth + listGap) * index,
+                  index,
+                })}
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / (topCardWidth + listGap));
+                  setActiveTopRated(Math.max(0, idx));
+                }}
+                onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: topRatedScrollX } } }], { useNativeDriver: false })}
+                scrollEventThrottle={16}
+                renderItem={({ item, index }) => {
+                  const inputRange = [
+                    (index - 1) * (topCardWidth + listGap),
+                    index * (topCardWidth + listGap),
+                    (index + 1) * (topCardWidth + listGap),
+                  ];
+                  const scale = topRatedScrollX.interpolate({ inputRange, outputRange: [0.9, 1.05, 0.9], extrapolate: 'clamp' });
+                  const opacity = topRatedScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
+
+                  return (
+                    <Animated.View
+                      style={[
+                        s.topCard,
+                        { width: topCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
+                        index === activeTopRated && s.activeGlow,
+                      ]}
+                    >
+                      <LawyerCard
+                        lawyer={item}
+                        onPress={() => {
+                          router.push({ pathname: '/lawyer/[id]', params: { id: String(item.id) } });
+                        }}
+                      />
+                    </Animated.View>
+                  );
+                }}
+              />
+            </View>
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+
+          {/* ABSOLUTE OVERLAYS */}
+          {showDropdown && (
+            <View style={s.suggestionsWrapper} pointerEvents="box-none">
+              <Text style={s.aiIntro}>
+                Nyaya AI helps you understand your legal problem, know your rights, and get actionable next steps instantly.
+              </Text>
+              <Animated.View
+                style={[
+                  s.dropWrap,
+                  { opacity: dropFade }
+                ]}
+              >
+                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                  {smartResults.map((item, idx) => (
+                    <TouchableOpacity 
+                      key={`smart-${idx}`} 
+                      style={s.suggestionItem}
+                      onPress={() => {
+                        setSearchText(item.title);
+                        setShowDropdown(false);
+                        router.push({ pathname: '/legal-insight', params: { query: item.title } });
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={s.iconBox}>
+                        <MaterialIcons name="auto-awesome" size={18} color="#8B5CF6" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.suggestionTitle}>{item.title}</Text>
+                        <Text style={s.suggestionSubtitle}>{item.description || "Legal guidance"}</Text>
+                      </View>
+                      <MaterialIcons name="north-east" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ))}
+                  {suggestions.map((sug, idx) => (
+                    <TouchableOpacity
+                      key={sug.id}
+                      style={s.suggestionItem}
+                      onPress={() => {
+                        setSearchText(sug.display);
+                        setShowDropdown(false);
+                        router.push({ pathname: '/legal-insight', params: { query: sug.display } });
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={s.iconBox}>
+                        <MaterialIcons name={sug.icon as any || "search"} size={18} color="#8B5CF6" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.suggestionTitle}>{sug.display}</Text>
+                        <Text style={s.suggestionSubtitle}>{sug.sub || "Legal search result"}</Text>
+                      </View>
+                      <MaterialIcons name="north-west" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </Animated.View>
+            </View>
+          )}
+
+          {routeSheetMounted && selectedSug && (() => {
             const accent = selectedSug.category ? (CAT_ACCENT[selectedSug.category] ?? "#4F6BFF") : "#4F6BFF";
             const sheetTranslate = routeSheetAnim.interpolate({ inputRange: [0, 1], outputRange: [300, 0] });
             const backdropOpacity = routeSheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.55] });
@@ -571,8 +579,9 @@ export default function HomeScreen() {
             );
           })()}
 
-        <NotificationSheet visible={notifSheetOpen} onClose={() => setNotifSheetOpen(false)} />
-      </View>
+          <NotificationSheet visible={notifSheetOpen} onClose={() => setNotifSheetOpen(false)} />
+        </View>
+      </SafeAreaView>
     </TouchableWithoutFeedback>
   );
 }
@@ -585,7 +594,7 @@ const s = StyleSheet.create({
     paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
-    zIndex: 20,
+    zIndex: 10,
   },
   header: {
     flexDirection: 'row',
@@ -624,6 +633,7 @@ const s = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderColor: Colors.border,
+    zIndex: 10,
   },
   searchRowFocused: { borderColor: Colors.primary, backgroundColor: '#0A0F1E' },
   searchInputWrap: { flex: 1, justifyContent: 'center' },
@@ -638,49 +648,60 @@ const s = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100 },
   greeting: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary, marginBottom: 16 },
-  dropWrap: {
+  suggestionsWrapper: {
     position: 'absolute',
-    left: 12,
-    right: 12,
-    backgroundColor: Colors.bgSecondary,
+    top: 110,
+    left: 16,
+    right: 16,
+    backgroundColor: '#0F172A',
     borderRadius: 16,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    maxHeight: '50%',
-    zIndex: 200,
-    elevation: 30,
+    paddingVertical: 8,
+    maxHeight: 400,
+    zIndex: 50,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    overflow: 'hidden',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  dropRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  aiIntro: {
+    color: '#94A3B8',
+    fontSize: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    gap: 10,
+    lineHeight: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
-  dropRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle },
-  dropIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
+  dropWrap: {
+    maxHeight: 320,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#1E293B',
     justifyContent: 'center',
-    flexShrink: 0,
+    alignItems: 'center',
   },
-  dropDisplay: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary },
-  dropSub: { fontSize: 11, color: Colors.textSecondary, marginTop: 1 },
-  dropCat: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-    flexShrink: 0,
+  suggestionTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
-  dropCatTxt: { fontSize: 10, fontWeight: '700', textTransform: 'capitalize' },
+  suggestionSubtitle: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 1,
+  },
   routeSheet: {
     position: 'absolute',
     bottom: 0,

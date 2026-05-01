@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,16 +8,26 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
-import { MOCK_QUICK_PROMPTS } from '../constants/mockData';
 import { buildNyayaResponseFromQuery } from '../constants/nyayaLegalIntelligence';
-import type { NoticeTemplateId } from '../constants/nyayaLegalNotices';
 import { useNyayaStore } from '../store/useNyayaStore';
-import { NYAYA_FREE_DAILY_LIMIT, useNyayaCreditsStore } from '../store/useNyayaCreditsStore';
+import { useNyayaCreditsStore } from '../store/useNyayaCreditsStore';
+
+const { width } = Dimensions.get('window');
+
+const QUICK_OPTIONS = [
+  { id: 'fir', title: 'FIR help', prompt: 'How do I file an FIR for theft?' },
+  { id: 'divorce', title: 'Divorce process', prompt: 'What is the process for mutual consent divorce in India?' },
+  { id: 'salary', title: 'Salary not paid', prompt: 'My employer is not paying my salary. What legal action can I take?' },
+];
 
 export default function NyayaScreen() {
   const router = useRouter();
@@ -26,21 +36,19 @@ export default function NyayaScreen() {
     aiPrompt?: string;
     autoSend?: string;
   }>();
+  
   const [input, setInput] = useState('');
   const [hasAutoTriggered, setHasAutoTriggered] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<FlatList>(null);
+  
   const { messages, isLoading, addUserMessage, addAIResponse, setLoading, clearSession } = useNyayaStore();
   const ensureDay = useNyayaCreditsStore((st) => st.ensureDay);
   const consumeQuestion = useNyayaCreditsStore((st) => st.consumeQuestion);
   const canAskQuestion = useNyayaCreditsStore((st) => st.canAskQuestion);
-  const questionsRemaining = useNyayaCreditsStore((st) => st.questionsRemaining());
-  const freeRemainingToday = useNyayaCreditsStore((st) => st.freeRemainingToday());
-  const packBalance = useNyayaCreditsStore((st) => st.packBalance);
 
-    // Handle auto-triggering from search or home card
+  // Handle auto-triggering
   useEffect(() => {
     if (autoSend !== '1' || hasAutoTriggered || messages.length > 0) return;
-
     const initialQuery = aiPrompt || prefillQuery;
     if (!initialQuery) return;
 
@@ -48,11 +56,6 @@ export default function NyayaScreen() {
     setInput(initialQuery);
 
     const timer = setTimeout(() => {
-      ensureDay();
-      if (!canAskQuestion()) {
-        Alert.alert('No credits', 'Please top up your Nyaya credits in Profile.');
-        return;
-      }
       handleSend(initialQuery);
     }, 300);
 
@@ -62,412 +65,205 @@ export default function NyayaScreen() {
   const handleSend = (text?: string) => {
     const query = (text ?? input).trim();
     if (!query) return;
+
     ensureDay();
     if (!canAskQuestion()) {
-      Alert.alert(
-        'Limit reached',
-        `Buy credits from Profile ? Nyaya AI, or wait until tomorrow for your free questions.`
-      );
+      Alert.alert('Limit reached', 'You have used your free questions. Buy more credits in Profile.');
       return;
     }
-    if (!consumeQuestion()) {
-      Alert.alert('Limit reached', 'Could not deduct a credit. Try buying a pack from Profile.');
-      return;
-    }
+    if (!consumeQuestion()) return;
+
     setInput('');
     addUserMessage(query);
     setLoading(true);
+
+    // Simulate AI response
     setTimeout(() => {
-      const intel = buildNyayaResponseFromQuery(query);
-      addAIResponse(intel);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-    }, 1600);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      const response = buildNyayaResponseFromQuery(query);
+      addAIResponse(response);
+      setLoading(false);
+    }, 1500);
   };
 
-  const openNotice = (templateId: string | null) => {
-    if (!templateId) return;
-    router.push({
-      pathname: '/nyaya-notice',
-      params: { templateId: templateId as NoticeTemplateId },
-    } as any);
-  };
-
-  const blocked = !canAskQuestion() && !isLoading;
+  // Safe auto-scroll
+  useEffect(() => {
+    if (scrollRef.current && messages.length > 0) {
+      scrollRef.current.scrollToEnd({ animated: true });
+    }
+  }, [messages, isLoading]);
 
   return (
-    <View style={s.root}>
-      <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.bgPrimary }} />
-
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-          <MaterialIcons name="close" size={22} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={s.headerCenter}>
-          <Text style={s.headerTitle}>NyayaAI</Text>
-          <Text style={s.headerSub}>INDIA-FOCUSED LEGAL GUIDANCE</Text>
-        </View>
-        <TouchableOpacity onPress={clearSession} style={s.newBtn}>
-          <Text style={s.newBtnTxt}>New</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={s.creditBar}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.creditBarLabel}>Questions left today</Text>
-          <Text style={s.creditBarValue}>{questionsRemaining}</Text>
-          <Text style={s.creditBarSub}>
-            Free (up to {NYAYA_FREE_DAILY_LIMIT}/day): {freeRemainingToday} · Pack: {packBalance}
-          </Text>
-        </View>
-        <TouchableOpacity style={s.creditBuy} onPress={() => router.push('/profile/buy-credits')} activeOpacity={0.85}>
-          <Text style={s.creditBuyTxt}>Buy</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        showsVerticalScrollIndicator={false}
-        style={s.chipsScroll}
-        contentContainerStyle={s.chipsContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {MOCK_QUICK_PROMPTS.map((p) => (
-          <TouchableOpacity
-            key={p.id}
-            style={[s.chip, blocked && s.chipDisabled]}
-            onPress={() => handleSend(p.prompt)}
-            activeOpacity={0.8}
-            disabled={blocked || isLoading}
-          >
-            <Text style={s.chipTxt}>{p.label}</Text>
+    <View style={styles.root}>
+      <SafeAreaView edges={['top']} style={styles.header}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialIcons name="arrow-back" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerTitle}>Nyaya AI</Text>
+            <View style={styles.onlineStatus}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.onlineText}>Always Online</Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={clearSession} style={styles.clearBtn}>
+            <MaterialIcons name="refresh" size={22} color={Colors.textTertiary} />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
 
-      <ScrollView
-        ref={scrollRef}
-        style={s.msgList}
-        contentContainerStyle={s.msgContent}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        {messages.length === 0 && (
-          <View style={s.emptyState}>
-            <View style={s.emptyIcon}>
-              <MaterialIcons name="auto-awesome" size={36} color={Colors.gold} />
-            </View>
-            <Text style={s.emptyTitle}>Ask NyayaAI</Text>
-            <Text style={s.emptySub}>
-              Plain language — Hindi or English. You get case understanding, Indian statutes (max 3), next steps, optional
-              notice draft, and lawyer matches.
-            </Text>
-          </View>
-        )}
-
-        {messages.map((msg) => (
-          <View key={msg.id}>
-            {msg.role === 'user' ? (
-              <View style={s.userBubble}>
-                <Text style={s.userBubbleTxt}>{msg.text}</Text>
+        <FlatList
+          ref={scrollRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.chatContent}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={messages.length === 0 && !isLoading ? (
+            <View style={styles.welcomeContainer}>
+              <View style={styles.aiIconLarge}>
+                <MaterialIcons name="auto-awesome" size={40} color={Colors.gold} />
               </View>
-            ) : msg.response ? (
-              <View style={s.aiCard}>
-                <View style={s.aiCardHeader}>
-                  <View style={s.aiIconBox}>
-                    <MaterialIcons name="auto-awesome" size={18} color={Colors.gold} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.aiCardTitle}>{msg.response.issue_title}</Text>
-                    <View style={s.catPill}>
-                      <Text style={s.catPillTxt}>{msg.response.category_label}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={s.predictionBlock}>
-                  <Text style={s.blockLabel}>ORIENTATION SCORE</Text>
-                  <Text style={s.predictionPct}>{msg.response.prediction_range}</Text>
-                  <Text style={s.predictionSub}>Mock estimate from similar Indian forums — not a court prediction</Text>
-                </View>
-
-                <View style={s.block}>
-                  <Text style={s.blockLabel}>YOUR SITUATION</Text>
-                  <Text style={s.blockText}>{msg.response.case_understanding}</Text>
-                </View>
-
-                <View style={s.block}>
-                  <Text style={s.blockLabel}>INDIAN LAWS THAT MAY APPLY (TOP {msg.response.legal_mapping.length})</Text>
-                  {msg.response.legal_mapping.map((law, i) => (
-                    <View key={i} style={s.lawCard}>
-                      <Text style={s.lawAct}>{law.act}</Text>
-                      <Text style={s.lawPlain}>{law.plainEnglish}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={s.block}>
-                  <Text style={s.blockLabel}>NEXT STEPS</Text>
-                  {msg.response.recommended_actions.map((action, i) => (
-                    <View key={i} style={s.actionRow}>
-                      <Text style={s.actionNum}>{String(i + 1).padStart(2, '0')}</Text>
-                      <Text style={s.actionTxt}>{action}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={s.timeSensRow}>
-                  <MaterialIcons name="schedule" size={14} color={Colors.warning} />
-                  <Text style={s.timeSensTxt}>{msg.response.time_sensitivity}</Text>
-                </View>
-
-                {msg.response.notice_template_id ? (
-                  <TouchableOpacity
-                    style={s.noticeBtn}
-                    onPress={() => openNotice(msg.response!.notice_template_id)}
-                    activeOpacity={0.85}
+              <Text style={styles.welcomeTitle}>Hi 👋 How can I help you?</Text>
+              <Text style={styles.welcomeSub}>I can help you understand legal procedures, your rights, and guide you through your situation.</Text>
+              
+              <View style={styles.quickOptions}>
+                {QUICK_OPTIONS.map(opt => (
+                  <TouchableOpacity 
+                    key={opt.id} 
+                    style={styles.quickOpt}
+                    onPress={() => handleSend(opt.prompt)}
                   >
-                    <MaterialIcons name="description" size={20} color={Colors.gold} />
-                    <Text style={s.noticeBtnTxt}>Generate legal notice</Text>
-                    <MaterialIcons name="chevron-right" size={20} color={Colors.gold} />
+                    <Text style={styles.quickOptTxt}>{opt.title}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color={Colors.textTertiary} />
                   </TouchableOpacity>
-                ) : null}
-
-                <View style={s.block}>
-                  <Text style={s.blockLabel}>LAWYERS FOR YOU (MOCK)</Text>
-                  {msg.response.lawyer_cards.map((lawyer) => (
-                    <View key={lawyer.id} style={s.lawyerCard}>
-                      <View style={s.lawyerTop}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.lawyerName}>{lawyer.name}</Text>
-                          <Text style={s.lawyerSpec}>{lawyer.specialization}</Text>
-                          <Text style={s.lawyerMeta}>
-                            {lawyer.city}, {lawyer.state} · {lawyer.experienceYears} yrs exp. · ? {lawyer.rating.toFixed(1)}
-                          </Text>
-                          <Text style={s.lawyerFee}>{lawyer.feeLabel}</Text>
-                        </View>
-                        <View style={s.tierPill}>
-                          <Text style={s.tierPillTxt}>{lawyer.tier}</Text>
-                        </View>
-                      </View>
-                      <TouchableOpacity
-                        style={s.consultBtn}
-                        onPress={() => router.push({ pathname: '/lawyer/[id]', params: { id: lawyer.id } } as any)}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={s.consultBtnTxt}>Consult</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-
-                <Text style={s.disclaimer}>{msg.response.disclaimer}</Text>
-
-                <TouchableOpacity style={s.lawyerCta} onPress={() => router.push('/(tabs)/lawyers')} activeOpacity={0.85}>
-                  <Text style={s.lawyerCtaTxt}>Browse all lawyers</Text>
-                </TouchableOpacity>
+                ))}
               </View>
-            ) : null}
-          </View>
-        ))}
-
-        {isLoading && (
-          <View style={s.loadingRow}>
-            <View style={s.aiIconBox}>
-              <MaterialIcons name="auto-awesome" size={16} color={Colors.gold} />
             </View>
-            <View style={s.typingDots}>
-              <ActivityIndicator size="small" color={Colors.gold} />
-              <Text style={s.typingTxt}>NyayaAI is mapping Indian law…</Text>
-            </View>
-          </View>
-        )}
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
-
-      <View style={s.inputBar}>
-        <SafeAreaView edges={['bottom']} style={{ backgroundColor: Colors.bgSecondary }}>
-          {blocked ? (
-            <Text style={s.limitNote}>You've reached today's limit. Tap Buy to add credits or try again tomorrow.</Text>
           ) : null}
-          <View style={s.inputRow}>
+          renderItem={({ item }) => (
+            <View 
+              style={[
+                styles.message,
+                item.role === 'user' ? styles.userMsg : styles.aiMsg
+              ]}
+            >
+              <Text style={styles.msgText}>
+                {item.text}
+              </Text>
+              <Text style={styles.time}>{item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+            </View>
+          )}
+          ListFooterComponent={isLoading ? (
+            <View style={[styles.message, styles.aiMsg]}>
+              <View style={styles.loadingBubble}>
+                <ActivityIndicator size="small" color={Colors.gold} />
+                <Text style={styles.loadingText}>Nyaya is thinking...</Text>
+              </View>
+            </View>
+          ) : null}
+          onContentSizeChange={() => messages.length > 0 && scrollRef.current?.scrollToEnd({ animated: true })}
+        />
+
+        <View style={styles.inputBar}>
+          <View style={styles.inputRow}>
             <TextInput
-              style={[s.textInput, blocked && s.textInputDisabled]}
+              style={styles.input}
+              placeholder="Type your legal query..."
+              placeholderTextColor="#94A3B8"
               value={input}
               onChangeText={setInput}
-              placeholder={blocked ? 'Limit reached — buy credits for more' : 'Describe your issue in plain words…'}
-              placeholderTextColor={Colors.textTertiary}
               multiline
-              returnKeyType="send"
-              onSubmitEditing={() => handleSend()}
-              editable={!blocked && !isLoading}
+              maxLength={500}
             />
-            <TouchableOpacity style={s.micBtn} disabled={blocked}>
-              <MaterialIcons name="mic" size={20} color={Colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.sendBtn, (!input.trim() || blocked) && s.sendBtnDim]}
+            <TouchableOpacity 
+              style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]} 
               onPress={() => handleSend()}
-              disabled={!input.trim() || isLoading || blocked}
-              activeOpacity={0.85}
+              disabled={!input.trim()}
             >
-              <MaterialIcons name="send" size={20} color="#fff" />
+              <Text style={styles.sendIcon}>➤</Text>
             </TouchableOpacity>
           </View>
-        </SafeAreaView>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.bgPrimary },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle },
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#050A14' },
+  header: { backgroundColor: '#0D1117', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  headerContent: { height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
   backBtn: { padding: 4 },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  headerSub: { fontSize: 9, color: Colors.textTertiary, letterSpacing: 0.8 },
-  newBtn: { backgroundColor: Colors.bgElevated, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  newBtnTxt: { color: Colors.primary, fontSize: 12, fontWeight: '600' },
-  creditBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderSubtle,
-    backgroundColor: Colors.bgSecondary,
-  },
-  creditBarLabel: { color: Colors.textTertiary, fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
-  creditBarValue: { color: Colors.gold, fontSize: 20, fontWeight: '800', marginTop: 2 },
-  creditBarSub: { color: Colors.textSecondary, fontSize: 10, marginTop: 4 },
-  creditBuy: { backgroundColor: Colors.primary, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
-  creditBuyTxt: { color: '#fff', fontWeight: '800', fontSize: 13 },
-  chipsScroll: { maxHeight: 48, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle },
-  chipsContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 8, alignItems: 'center' },
-  chip: { backgroundColor: Colors.bgElevated, borderRadius: 100, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: Colors.border },
-  chipDisabled: { opacity: 0.45 },
-  chipTxt: { color: Colors.textSecondary, fontSize: 12, fontWeight: '600' },
-  msgList: { flex: 1 },
-  msgContent: { padding: 16, gap: 16 },
-  emptyState: { alignItems: 'center', paddingTop: 48, gap: 14 },
-  emptyIcon: { width: 72, height: 72, borderRadius: 20, backgroundColor: Colors.goldSubtle, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
-  emptySub: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20, paddingHorizontal: 16 },
-  userBubble: {
-    alignSelf: 'flex-end',
-    backgroundColor: Colors.primarySubtle,
-    borderRadius: 16,
-    borderBottomRightRadius: 4,
-    padding: 14,
-    maxWidth: '85%',
-    borderWidth: 1,
-    borderColor: Colors.primary + '44',
-  },
-  userBubbleTxt: { color: Colors.textPrimary, fontSize: 14, lineHeight: 21 },
-  aiCard: { backgroundColor: Colors.bgSecondary, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: Colors.goldSubtle },
-  aiCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
-  aiIconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.goldSubtle, alignItems: 'center', justifyContent: 'center' },
-  aiCardTitle: { fontSize: 15, fontWeight: '700', color: Colors.gold },
-  catPill: {
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    backgroundColor: Colors.bgTertiary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  catPillTxt: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
-  predictionBlock: { backgroundColor: Colors.bgTertiary, borderRadius: 12, padding: 12, alignItems: 'center', marginBottom: 12 },
-  blockLabel: { fontSize: 10, color: Colors.textTertiary, fontWeight: '700', letterSpacing: 0.8, marginBottom: 6 },
-  predictionPct: { fontSize: 28, fontWeight: '800', color: Colors.gold },
-  predictionSub: { fontSize: 11, color: Colors.textSecondary, marginTop: 4, textAlign: 'center' },
-  block: { marginBottom: 12 },
-  blockText: { fontSize: 13, color: Colors.textPrimary, lineHeight: 21 },
-  lawCard: {
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  lawAct: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
-  lawPlain: { fontSize: 12, color: Colors.textSecondary, lineHeight: 18 },
-  actionRow: { flexDirection: 'row', gap: 10, marginTop: 8, alignItems: 'flex-start' },
-  actionNum: { fontSize: 13, fontWeight: '700', color: Colors.primary, width: 22 },
-  actionTxt: { fontSize: 13, color: Colors.textPrimary, flex: 1, lineHeight: 20 },
-  timeSensRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, backgroundColor: Colors.warningSubtle, borderRadius: 8, padding: 8 },
-  timeSensTxt: { fontSize: 12, color: Colors.warning, flex: 1 },
-  noticeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.gold + '66',
-    backgroundColor: Colors.goldSubtle,
+  headerTitleWrap: { flex: 1, marginLeft: 16 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
+  onlineStatus: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E', marginRight: 6 },
+  onlineText: { fontSize: 11, color: '#22C55E', fontWeight: '500' },
+  clearBtn: { padding: 4 },
+  container: { flex: 1 },
+  chatArea: { flex: 1 },
+  chatContent: { padding: 16, paddingBottom: 32 },
+  welcomeContainer: { alignItems: 'center', marginTop: 60, paddingHorizontal: 20 },
+  aiIconLarge: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(245,166,35,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  welcomeTitle: { fontSize: 24, fontWeight: '800', color: '#fff', marginBottom: 12 },
+  welcomeSub: { fontSize: 14, color: 'rgba(255,255,255,0.5)', textAlign: 'center', lineHeight: 22, marginBottom: 40 },
+  quickOptions: { width: '100%', gap: 12 },
+  quickOpt: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0D1117', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  quickOptTxt: { flex: 1, fontSize: 14, color: '#fff', fontWeight: '500' },
+  message: {
+    maxWidth: '80%',
+    padding: 12,
+    borderRadius: 14,
     marginBottom: 12,
   },
-  noticeBtnTxt: { color: Colors.gold, fontSize: 14, fontWeight: '800' },
-  lawyerCard: {
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
+  userMsg: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#4F46E5',
+    borderBottomRightRadius: 4,
+  },
+  aiMsg: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#1E293B',
+    borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  lawyerTop: { flexDirection: 'row', gap: 10 },
-  lawyerName: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
-  lawyerSpec: { fontSize: 12, color: Colors.primary, marginTop: 2, fontWeight: '600' },
-  lawyerMeta: { fontSize: 11, color: Colors.textSecondary, marginTop: 4 },
-  lawyerFee: { fontSize: 11, color: Colors.textTertiary, marginTop: 2 },
-  tierPill: { backgroundColor: Colors.primarySubtle, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, alignSelf: 'flex-start' },
-  tierPillTxt: { fontSize: 10, fontWeight: '800', color: Colors.primary },
-  consultBtn: {
-    marginTop: 10,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  msgText: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 20,
   },
-  consultBtnTxt: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  disclaimer: { fontSize: 11, color: Colors.textTertiary, fontStyle: 'italic', lineHeight: 17, marginBottom: 12 },
-  lawyerCta: { backgroundColor: Colors.bgTertiary, borderRadius: 12, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
-  lawyerCtaTxt: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700' },
-  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  typingDots: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.bgSecondary, borderRadius: 12, padding: 12 },
-  typingTxt: { color: Colors.textSecondary, fontSize: 13 },
-  inputBar: { backgroundColor: Colors.bgSecondary, borderTopWidth: 1, borderTopColor: Colors.borderSubtle },
-  limitNote: { color: Colors.warning, fontSize: 12, paddingHorizontal: 12, paddingTop: 8, lineHeight: 18 },
-  inputRow: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  textInput: {
-    flex: 1,
-    color: Colors.textPrimary,
-    fontSize: 15,
-    maxHeight: 100,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: Colors.bgTertiary,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  time: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.3)',
+    marginTop: 4,
+    alignSelf: 'flex-end',
   },
-  textInputDisabled: { opacity: 0.55 },
-  micBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  sendBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
-  sendBtnDim: { opacity: 0.4 },
+  loadingBubble: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  loadingText: { fontSize: 13, color: Colors.textSecondary },
+  inputBar: { 
+    padding: 16, 
+    backgroundColor: '#0F172A', 
+    borderTopWidth: 1, 
+    borderTopColor: 'rgba(255,255,255,0.05)',
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+  },
+  inputRow: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-end', 
+    backgroundColor: '#1A2130', 
+    borderRadius: 24, 
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    gap: 10 
+  },
+  input: { flex: 1, color: '#fff', fontSize: 15, maxHeight: 100, paddingTop: 8, paddingBottom: 8 },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  sendBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  sendIcon: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });
-
-

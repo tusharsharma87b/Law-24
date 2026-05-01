@@ -60,155 +60,102 @@ type Props = {
 };
 
 export function LawyerCard({ data, onPress, ctaLabel = 'Talk Now' }: Props) {
-  const respondMins = data.isOnline
-    ? Math.min(2, Math.max(1, data.responseTimeMinutes))
-    : Math.max(1, data.responseTimeMinutes);
-
   return (
-    <View style={styles.shadowContainer}>
-      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
-        <View style={styles.content}>
-          <View style={styles.topRow}>
-            <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>{data.initials}</Text>
-            </View>
-            <View style={styles.nameStatusRow}>
-              <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
-                {data.name}
-              </Text>
-              <View style={[styles.onlineBadge, !data.isOnline && styles.offlineBadge]}>
-                <Text style={[styles.onlineText, !data.isOnline && styles.offlineText]}>
-                  {data.isOnline ? 'Online' : 'Offline'}
-                </Text>
-              </View>
-            </View>
-          </View>
-          <Text style={styles.cityCourt} numberOfLines={1}>{data.city} • {data.courtLabel}</Text>
-          <Text style={styles.spec} numberOfLines={1}>{data.specialization}</Text>
-          <Text style={styles.respond}>Responds in {respondMins} mins</Text>
+    <View style={styles.card}>
+      <View style={styles.row}>
+        <View style={styles.avatar}>
+          <Text style={styles.initials}>{data.initials}</Text>
+        </View>
 
-          <View style={styles.metaRow}>
-            <View style={styles.ratingRow}>
-              <AppIcon name="rating" size={16} color={Colors.gold} />
-              <Text style={styles.ratingTxt}>{data.ratingAverage.toFixed(1)}</Text>
-            </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.name}>{data.name}</Text>
+          <Text style={styles.meta}>
+            {data.city} • {data.specialization}
+          </Text>
+
+          <View style={styles.rowBetween}>
+            <Text style={styles.rating}>⭐ {data.ratingAverage.toFixed(1)}</Text>
             <Text style={styles.price}>₹{data.chatPerMinuteInr}/min</Text>
           </View>
         </View>
+      </View>
 
-        <View style={styles.cta}>
-          <Text style={styles.ctaTxt}>{ctaLabel}</Text>
-        </View>
+      <TouchableOpacity style={styles.cta} onPress={onPress} activeOpacity={0.8}>
+        <Text style={styles.ctaText}>{ctaLabel}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  shadowContainer: {
-    borderRadius: 20,
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 0,
-  },
   card: {
-    width: '100%',
-    minHeight: 236,
-    borderRadius: 20,
-    backgroundColor: '#0B1220',
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
     padding: 16,
-    justifyContent: 'space-between',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  content: { gap: 0 },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  avatarContainer: {
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatar: {
     width: 52,
     height: 52,
     borderRadius: 26,
+    backgroundColor: '#4F46E5',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#5B6EF5',
   },
-  avatarText: {
-    color: '#FFF',
+  initials: {
+    color: '#fff',
     fontSize: 18,
-    fontWeight: '600',
-  },
-  nameStatusRow: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  onlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    height: 24,
-    borderRadius: 999,
-    backgroundColor: 'rgba(34,197,94,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.25)',
-    marginLeft: SPACING.sm,
-    flexShrink: 0,
-  },
-  offlineBadge: {
-    backgroundColor: 'rgba(107,114,128,0.14)',
-    borderColor: 'rgba(107,114,128,0.25)',
-  },
-  onlineText: {
-    color: '#22C55E',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  offlineText: {
-    color: '#9CA3AF',
+    fontWeight: '700',
   },
   name: {
-    flex: 1,
-    minWidth: 0,
-    color: '#FFFFFF',
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: 2,
   },
-  cityCourt: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginTop: SPACING.sm,
-  },
-  spec: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    marginTop: SPACING.xs,
-  },
-  respond: {
-    color: '#6B7280',
+  meta: {
+    color: '#94A3B8',
     fontSize: 12,
-    fontWeight: '500',
-    marginTop: SPACING.sm,
+    marginBottom: 8,
   },
-  metaRow: {
-    width: '100%',
+  rowBetween: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: SPACING.md,
   },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ratingTxt: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  price: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  rating: {
+    color: '#FBBF24',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  price: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   cta: {
-    marginTop: SPACING.lg,
-    width: '100%',
-    height: 48,
+    backgroundColor: '#4F46E5',
+    padding: 14,
     borderRadius: 12,
-    backgroundColor: Colors.primary,
+    marginTop: 12,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  ctaTxt: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  ctaText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });
 

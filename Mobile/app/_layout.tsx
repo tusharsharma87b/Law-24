@@ -50,14 +50,10 @@ export default function RootLayout() {
     if (!isHydrated || !isMounted) return;
 
     const inAuthGroup = segments[0] === '(auth)';
-    const inSearchGroup = segments[0] === 'nyaya' || segments[0] === 'smart-legal-search' || segments[0] === 'legal-search';
-    const showFAB = !inAuthGroup && !inSearchGroup;
 
     if (!user && !inAuthGroup) {
-      // Not logged in -> force login
       router.replace('/(auth)/login');
     } else if (user && inAuthGroup) {
-      // Logged in -> move out of auth screens
       router.replace('/(tabs)');
     }
   }, [user, segments, isHydrated, isMounted]);

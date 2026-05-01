@@ -10,6 +10,7 @@ import {
   Dimensions,
   Platform,
   View,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -34,30 +35,36 @@ export default function FloatingAIButton() {
   const defaultX = W - BTN_SIZE - MARGIN;
   const defaultY = H - BTN_SIZE - MARGIN - 80;
 
+  // Web check for early return
+  const IS_WEB = Platform.OS === 'web';
+
   const pan = useRef(new Animated.ValueXY({ x: defaultX, y: defaultY })).current;
   const posRef = useRef({ x: defaultX, y: defaultY });
   
   useEffect(() => {
+    if (IS_WEB) return;
     const listenerId = pan.addListener((v) => {
       posRef.current = v;
     });
     return () => pan.removeListener(listenerId);
-  }, []);
+  }, [IS_WEB]);
 
   const [isDragging, setIsDragging] = useState(false);
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 2 || Math.abs(gs.dy) > 2,
+      onStartShouldSetPanResponder: () => !IS_WEB,
+      onMoveShouldSetPanResponder: (_, gs) => !IS_WEB && (Math.abs(gs.dx) > 2 || Math.abs(gs.dy) > 2),
       
       onPanResponderGrant: () => {
+        if (IS_WEB) return;
         pan.setOffset({ x: posRef.current.x, y: posRef.current.y });
         pan.setValue({ x: 0, y: 0 });
         setIsDragging(false);
       },
 
       onPanResponderMove: (_, gs) => {
+        if (IS_WEB) return;
         if (!isDragging && (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5)) {
           setIsDragging(true);
         }
@@ -75,6 +82,7 @@ export default function FloatingAIButton() {
       },
 
       onPanResponderRelease: (_, gs) => {
+        if (IS_WEB) return;
         pan.flattenOffset();
         
         const finalX = posRef.current.x;
@@ -105,6 +113,25 @@ export default function FloatingAIButton() {
     setModalVisible(true);
   };
 
+  // Web optimized static render
+  if (IS_WEB) {
+    return (
+      <View style={styles.webContainer} pointerEvents="box-none">
+        <TouchableOpacity 
+          activeOpacity={0.8} 
+          onPress={handlePress} 
+          style={styles.touch}
+          pointerEvents="auto"
+        >
+          <LinearGradient colors={['#7C6CF8', '#4A6CF7']} style={styles.btn}>
+            <MaterialIcons name="auto-awesome" size={28} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
+        <FloatingAIModal visible={modalVisible} onClose={() => setModalVisible(false)} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.outerContainer} pointerEvents="box-none">
       <Animated.View
@@ -113,11 +140,13 @@ export default function FloatingAIButton() {
           { transform: pan.getTranslateTransform() }
         ]}
         {...panResponder.panHandlers}
+        pointerEvents="auto"
       >
         <TouchableOpacity 
           activeOpacity={0.8} 
           onPress={handlePress}
           style={styles.touch}
+          pointerEvents="auto"
         >
           <LinearGradient
             colors={['#7C6CF8', '#4A6CF7']}
@@ -145,6 +174,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: BTN_SIZE,
     height: BTN_SIZE,
+  },
+  webContainer: {
+    position: 'absolute',
+    bottom: MARGIN + 80,
+    right: MARGIN,
+    width: BTN_SIZE,
+    height: BTN_SIZE,
+    zIndex: 100,
   },
   touch: {
     width: BTN_SIZE,

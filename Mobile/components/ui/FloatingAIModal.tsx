@@ -9,9 +9,10 @@ import {
 import Modal from 'react-native-modal';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Platform, Modal as RNModal } from 'react-native';
 import { Colors } from '../../constants/colors';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 type FloatingAIModalProps = {
   visible: boolean;
@@ -20,13 +21,69 @@ type FloatingAIModalProps = {
 
 export default function FloatingAIModal({ visible, onClose }: FloatingAIModalProps) {
   const router = useRouter();
+  const IS_WEB = Platform.OS === 'web';
 
   const handleAction = (route: string) => {
     onClose();
     setTimeout(() => {
       router.push(route as any);
-    }, 300);
+    }, 100);
   };
+
+  const ModalContent = () => (
+    <View style={styles.content}>
+      <View style={styles.handle} />
+      
+      <Text style={styles.title}>How can we help today?</Text>
+      <Text style={styles.subtitle}>Our AI and Legal Experts are ready to assist you.</Text>
+
+      <View style={styles.options}>
+        <TouchableOpacity 
+          style={[styles.option, styles.primaryOption]} 
+          onPress={() => handleAction('/nyaya')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.iconWrap}>
+            <MaterialIcons name="auto-awesome" size={24} color={Colors.gold} />
+          </View>
+          <View style={styles.optionTextWrap}>
+            <Text style={styles.optionTitle}>Chat with Nyaya AI</Text>
+            <Text style={styles.optionSub}>Instant answers to legal queries</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.3)" />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.option} 
+          onPress={() => handleAction('/(tabs)/lawyers')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.iconWrap, { backgroundColor: 'rgba(79,110,247,0.1)' }]}>
+            <MaterialIcons name="people" size={24} color={Colors.primary} />
+          </View>
+          <View style={styles.optionTextWrap}>
+            <Text style={styles.optionTitle}>Talk to a Lawyer</Text>
+            <Text style={styles.optionSub}>Emergency call or scheduled session</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.3)" />
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+        <Text style={styles.cancelTxt}>Close</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (IS_WEB) {
+    if (!visible) return null;
+    return (
+      <View style={styles.webOverlay}>
+        <TouchableOpacity style={styles.webBackdrop} onPress={onClose} activeOpacity={1} />
+        <ModalContent />
+      </View>
+    );
+  }
 
   return (
     <Modal
@@ -39,51 +96,10 @@ export default function FloatingAIModal({ visible, onClose }: FloatingAIModalPro
       backdropOpacity={0.5}
       animationIn="slideInUp"
       animationOut="slideOutDown"
-      useNativeDriver
+      useNativeDriver={false}
       hideModalContentWhileAnimating
     >
-      <View style={styles.content}>
-        <View style={styles.handle} />
-        
-        <Text style={styles.title}>How can we help today?</Text>
-        <Text style={styles.subtitle}>Our AI and Legal Experts are ready to assist you.</Text>
-
-        <View style={styles.options}>
-          <TouchableOpacity 
-            style={[styles.option, styles.primaryOption]} 
-            onPress={() => handleAction('/nyaya')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.iconWrap}>
-              <MaterialIcons name="auto-awesome" size={24} color={Colors.gold} />
-            </View>
-            <View style={styles.optionTextWrap}>
-              <Text style={styles.optionTitle}>Chat with Nyaya AI</Text>
-              <Text style={styles.optionSub}>Instant answers to legal queries</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.3)" />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.option} 
-            onPress={() => handleAction('/(tabs)/lawyers')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconWrap, { backgroundColor: 'rgba(79,110,247,0.1)' }]}>
-              <MaterialIcons name="people" size={24} color={Colors.primary} />
-            </View>
-            <View style={styles.optionTextWrap}>
-              <Text style={styles.optionTitle}>Talk to a Lawyer</Text>
-              <Text style={styles.optionSub}>Emergency call or scheduled session</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.3)" />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-          <Text style={styles.cancelTxt}>Close</Text>
-        </TouchableOpacity>
-      </View>
+      <ModalContent />
     </Modal>
   );
 }
@@ -172,5 +188,23 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: 15,
     fontWeight: '600',
+  },
+  webOverlay: {
+    position: Platform.OS === 'web' ? ('fixed' as any) : 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  webBackdrop: {
+    position: Platform.OS === 'web' ? ('fixed' as any) : 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
 });

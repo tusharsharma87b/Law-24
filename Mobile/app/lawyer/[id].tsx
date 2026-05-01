@@ -31,6 +31,7 @@ import { getLawyerAvailability } from '../../constants/lawyersDirectory';
 import { Avatar } from '../../components/ui/Avatar';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { LAWYERS } from '../../data/lawyers';
 
 type Outcome = 'WON' | 'SETTLED' | 'ONGOING';
 
@@ -89,37 +90,42 @@ type FeedbackPayload = {
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
-function normalizeLawyer(raw: RawLawyer): Lawyer {
+function normalizeLawyer(raw: any): Lawyer {
   const availability = getLawyerAvailability(raw.id);
+  // Support both MOCK_LAWYERS and the new LAWYERS data structure
+  const name = raw.name || 'Unknown Lawyer';
+  const expertise = raw.expertise || (raw.specializations ? raw.specializations[0] : 'General Law');
+  const price = raw.price || (raw.fees ? raw.fees.chatPerMinuteInr : 25);
+  
   return {
-    id: raw.id,
-    name: raw.name.replace(/^Adv\.\s*/i, ''),
-    avatar: raw.initials,
-    verified: raw.verified,
-    rating: raw.rating.average,
-    reviewCount: raw.rating.totalReviews,
-    experienceYears: raw.experienceYears,
-    location: raw.city,
-    remoteAvailable: raw.servesRemote,
-    winRate: Math.round(raw.cases.winRatePercent),
-    casesHandled: raw.cases.total,
-    avgResponseTime: raw.responseTimeMinutes,
-    priceChatPerMin: raw.fees.chatPerMinuteInr,
-    priceCall30Min: raw.fees.call30minInr,
-    priceDocReview: raw.fees.documentReviewInr,
-    bio: raw.bio,
-    languages: raw.languages,
-    specializations: raw.specializations,
+    id: String(raw.id),
+    name: name.replace(/^Adv\.\s*/i, ''),
+    avatar: raw.initials || name.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2),
+    verified: raw.verified ?? true,
+    rating: raw.rating?.average ?? 4.8,
+    reviewCount: raw.rating?.totalReviews ?? 120,
+    experienceYears: raw.experienceYears ?? 10,
+    location: raw.city || 'Delhi',
+    remoteAvailable: raw.servesRemote ?? true,
+    winRate: raw.cases?.winRatePercent ?? 88,
+    casesHandled: raw.cases?.total ?? 350,
+    avgResponseTime: raw.responseTimeMinutes ?? 5,
+    priceChatPerMin: price,
+    priceCall30Min: raw.fees?.call30minInr ?? 1200,
+    priceDocReview: raw.fees?.documentReviewInr ?? 500,
+    bio: raw.bio || `${name} is a highly experienced legal professional specializing in ${expertise}.`,
+    languages: raw.languages ?? ['English', 'Hindi'],
+    specializations: raw.specializations || [expertise],
     badges: [
       'Top Performer',
-      raw.responseTimeMinutes <= 5 ? 'Fast Responder' : 'Highly Recommended',
+      (raw.responseTimeMinutes || 5) <= 5 ? 'Fast Responder' : 'Highly Recommended',
       'Highly Recommended',
-      'High Success in 498A',
+      `Expert in ${expertise}`,
     ],
     queueCount: availability.queue,
     avgWaitTime: availability.isOnline ? 5 : 0,
-    successRate: Math.round(raw.cases.winRatePercent),
-    topCategoryTag: `Top Rated in ${raw.specializations[0] ?? 'Matrimonial'} Cases`,
+    successRate: raw.cases?.winRatePercent ?? 92,
+    topCategoryTag: `Top Rated in ${expertise} Cases`,
     isOnline: availability.isOnline,
     lastSeen: availability.lastSeen,
   };
@@ -727,37 +733,24 @@ export default function LawyerProfileScreen() {
   const userCaseType = Array.isArray(params.caseType) ? params.caseType[0] : params.caseType || '498A';
 
   const normalizedId = Array.isArray(params.id) ? params.id[0] : params.id;
-  
-  if (!normalizedId) {
-    return (
-      <SafeAreaView style={[s.root, { justifyContent: 'center', alignItems: 'center' }]}>
-        <MaterialIcons name="error-outline" size={48} color={Colors.textTertiary} />
-        <Text style={[s.name, { marginTop: 16 }]}>Lawyer not found</Text>
-        <TouchableOpacity 
-          style={[s.primaryCta, { marginTop: 24, width: 200 }]} 
-          onPress={() => router.back()}
-        >
-          <Text style={s.primaryCtaTxt}>Go Back</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
-
-  const raw = MOCK_LAWYERS.find((l) => l.id === normalizedId);
+  // Search in both data sources for maximum compatibility
+  const raw = LAWYERS.find((l) => String(l.id) === String(normalizedId)) || 
+              MOCK_LAWYERS.find((l) => String(l.id) === String(normalizedId));
+              
   const lawyer = useMemo(() => (raw ? normalizeLawyer(raw) : null), [raw]);
   
   if (!lawyer) {
     return (
-      <SafeAreaView style={[s.root, { justifyContent: 'center', alignItems: 'center' }]}>
-        <MaterialIcons name="person-off" size={48} color={Colors.textTertiary} />
-        <Text style={[s.name, { marginTop: 16 }]}>Invalid lawyer</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.bgPrimary }}>
+        <MaterialIcons name="person-off" size={64} color={Colors.textTertiary} />
+        <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.textPrimary, marginTop: 16 }}>Lawyer not found</Text>
         <TouchableOpacity 
-          style={[s.primaryCta, { marginTop: 24, width: 200 }]} 
+          style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: Colors.primary, borderRadius: 12 }} 
           onPress={() => router.back()}
         >
-          <Text style={s.primaryCtaTxt}>Go Back</Text>
+          <Text style={{ color: '#fff', fontWeight: '600' }}>Go Back</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
     );
   }
   const [reviews, setReviews] = useState<Review[]>([]);

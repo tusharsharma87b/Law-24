@@ -54,14 +54,23 @@ export function findLegalIntent(query: string, data: Category[]): LegalIntentMat
 }
 
 export function searchLegalItems(query: string, data: Category[]): Item[] {
-  if (!query || query.length < 2) return [];
+  if (!query || query.length < 1) return [];
+  
+  // Guard against undefined or invalid data
+  if (!data || !Array.isArray(data)) {
+    console.warn('[Search] Invalid legal data provided:', data);
+    return [];
+  }
   
   const results: { item: Item; score: number }[] = [];
   
   for (const category of data) {
+    if (!category || !Array.isArray(category.items)) continue;
+    
     for (const item of category.items) {
+      if (!item) continue;
       const score = scoreItem(query, item);
-      if (score > 10) { // minimum threshold for suggestion
+      if (score > 8) { // lower threshold for better suggestions
         results.push({ item, score });
       }
     }

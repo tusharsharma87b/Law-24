@@ -175,9 +175,10 @@ const ALL_STATIC: SearchSuggestion[] = [
  */
 export function generateSuggestions(
   input: string,
-  lawyers: DirectoryLawyer[],
+  lawyers: DirectoryLawyer[] = [],
   maxResults = 7,
 ): SearchSuggestion[] {
+  if (!Array.isArray(lawyers)) return [];
   const raw = input.trim();
 
   // Empty input → return trending
