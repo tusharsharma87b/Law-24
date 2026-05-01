@@ -727,8 +727,39 @@ export default function LawyerProfileScreen() {
   const userCaseType = Array.isArray(params.caseType) ? params.caseType[0] : params.caseType || '498A';
 
   const normalizedId = Array.isArray(params.id) ? params.id[0] : params.id;
+  
+  if (!normalizedId) {
+    return (
+      <SafeAreaView style={[s.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <MaterialIcons name="error-outline" size={48} color={Colors.textTertiary} />
+        <Text style={[s.name, { marginTop: 16 }]}>Lawyer not found</Text>
+        <TouchableOpacity 
+          style={[s.primaryCta, { marginTop: 24, width: 200 }]} 
+          onPress={() => router.back()}
+        >
+          <Text style={s.primaryCtaTxt}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   const raw = MOCK_LAWYERS.find((l) => l.id === normalizedId);
   const lawyer = useMemo(() => (raw ? normalizeLawyer(raw) : null), [raw]);
+  
+  if (!lawyer) {
+    return (
+      <SafeAreaView style={[s.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <MaterialIcons name="person-off" size={48} color={Colors.textTertiary} />
+        <Text style={[s.name, { marginTop: 16 }]}>Invalid lawyer</Text>
+        <TouchableOpacity 
+          style={[s.primaryCta, { marginTop: 24, width: 200 }]} 
+          onPress={() => router.back()}
+        >
+          <Text style={s.primaryCtaTxt}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
   const [reviews, setReviews] = useState<Review[]>([]);
 
   const favorableRate = useMemo(() => {
