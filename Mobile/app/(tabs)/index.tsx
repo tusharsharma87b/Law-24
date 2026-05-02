@@ -80,7 +80,7 @@ export default function HomeScreen() {
 
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  
+
   const HOME_LEGAL_CATEGORIES = [
     { id: "1", title: "Police / FIR", type: "Criminal", icon: "gavel" },
     { id: "2", title: "Family / Divorce", type: "Family", icon: "people" },
@@ -148,16 +148,21 @@ export default function HomeScreen() {
     closeRouteSheet();
     router.push({ pathname: '/(tabs)/lawyers', params: { category: selectedSug.category } });
   };
-  const goToNyaya = () => {
-    if (!selectedSug) return;
-    closeRouteSheet();
-    router.push({ pathname: '/nyaya', params: { query: selectedSug.display, autoSend: '1' } });
-  };
 
   const handleCategoryPress = (item: any) => {
+    const categoryMap: Record<string, string> = {
+      "Police / FIR": "Criminal Law",
+      "Family / Divorce": "Family Law",
+      "Property Dispute": "Property Law",
+      "Job Issues": "Employment Law",
+    };
+
+    const selectedCategory = categoryMap[item.title];
+
+    // 🔥 DIRECTLY GO TO LAWYERS (NOT legal-category)
     router.push({
       pathname: "/(tabs)/lawyers",
-      params: { category: item.type },
+      params: { category: selectedCategory },
     });
   };
 
@@ -242,9 +247,9 @@ export default function HomeScreen() {
           </View>
 
           {/* MAIN SCROLLABLE CONTENT */}
-          <ScrollView 
-            style={s.scroll} 
-            contentContainerStyle={s.content} 
+          <ScrollView
+            style={s.scroll}
+            contentContainerStyle={s.content}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
@@ -315,7 +320,7 @@ export default function HomeScreen() {
                     <Text style={s.nyayaTag}>Advanced Legal Intelligence</Text>
                   </View>
                 </View>
-                
+
                 <Text style={s.nyayaDesc}>
                   Describe your legal problem in Hindi or English. We help you understand your rights and next steps instantly.
                 </Text>
@@ -335,8 +340,8 @@ export default function HomeScreen() {
                   </View>
                 </View>
 
-                <TouchableOpacity 
-                  style={s.nyayaBtn} 
+                <TouchableOpacity
+                  style={s.nyayaBtn}
                   onPress={() => router.push('/nyaya')}
                   activeOpacity={0.8}
                 >
@@ -481,8 +486,8 @@ export default function HomeScreen() {
               >
                 <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                   {smartResults.map((item, idx) => (
-                    <TouchableOpacity 
-                      key={`smart-${idx}`} 
+                    <TouchableOpacity
+                      key={`smart-${idx}`}
                       style={s.suggestionItem}
                       onPress={() => {
                         setSearchText(item.title);
@@ -566,7 +571,11 @@ export default function HomeScreen() {
                     </View>
                     <MaterialIcons name="arrow-forward-ios" size={14} color="#6B7280" />
                   </TouchableOpacity>
-                  <TouchableOpacity style={[s.routeCard, s.routeCardAI]} onPress={goToNyaya} activeOpacity={0.85}>
+                  <TouchableOpacity style={[s.routeCard, s.routeCardAI]} onPress={() => {
+                    if (!selectedSug) return;
+                    closeRouteSheet();
+                    router.push({ pathname: '/nyaya', params: { query: selectedSug.display, autoSend: '1' } });
+                  }} activeOpacity={0.85}>
                     <View style={[s.routeCardIcon, { backgroundColor: Colors.goldSubtle }]}>
                       <MaterialIcons name="auto-awesome" size={22} color={Colors.gold} />
                     </View>
@@ -837,12 +846,12 @@ const s = StyleSheet.create({
   nyayaCard: { marginBottom: 24, borderRadius: 20, overflow: 'hidden' },
   nyayaGradient: { padding: 20 },
   nyayaHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
-  nyayaIconWrap: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 14, 
-    backgroundColor: 'rgba(245,166,35,0.1)', 
-    alignItems: 'center', 
+  nyayaIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(245,166,35,0.1)',
+    alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(245,166,35,0.2)',
@@ -853,7 +862,7 @@ const s = StyleSheet.create({
   nyayaPoints: { gap: 10, marginBottom: 20 },
   nyayaPoint: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   nyayaPointTxt: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500' },
-  nyayaBtn: { 
+  nyayaBtn: {
     backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
