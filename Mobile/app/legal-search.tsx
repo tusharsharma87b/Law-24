@@ -29,7 +29,7 @@ const DIR_FROM_CASE: Record<string, string> = {
 };
 
 function useQueryParam(): string {
-  const { q } = useLocalSearchParams<{ q?: string }>();
+  const { q } = useLocalSearchParams<{ q?: string | string[] }>();
   if (typeof q === 'string') return q.trim();
   if (Array.isArray(q)) return (q[0] ?? '').trim();
   return '';

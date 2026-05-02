@@ -29,7 +29,7 @@ export const useWalletStore = create<WalletState>((set) => ({
   hydrateWallet: async (userId: string) => {
     set({ loading: true, error: null });
     try {
-      const wallet = await apiGet(`/wallet/${userId}`);
+      const wallet = await apiGet(`/wallet/${userId}`) as { balance?: number; transactions?: any[] } | null;
       set({
         balance: Number(wallet?.balance ?? 0),
         transactions: Array.isArray(wallet?.transactions) ? wallet.transactions : [],

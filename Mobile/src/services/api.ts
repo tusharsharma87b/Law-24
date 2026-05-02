@@ -62,62 +62,91 @@ export async function getStoredAccessToken(): Promise<string | null> {
 }
 
 async function parseJsonBody(res: Response): Promise<{ data: unknown; message?: string }> {
-  const text = await res.text();
-  if (!text) return { data: null };
   try {
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    const message = typeof parsed?.message === 'string' ? parsed.message : undefined;
-    return { data: parsed, message };
-  } catch {
-    return { data: null };
+    const text = await res.text();
+    console.log(`[API] Response status ${res.status} raw text (${text.length} chars):`, text.substring(0, 200));
+    
+    if (!text || text.trim() === '') {
+      console.warn('[API] Empty response body');
+      return { data: null, message: 'Empty response from server' };
+    }
+    
+    try {
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      console.log('[API] Successfully parsed JSON:', JSON.stringify(parsed).substring(0, 200));
+      const message = typeof parsed?.message === 'string' ? parsed.message : undefined;
+      return { data: parsed, message };
+    } catch (parseError) {
+      console.error('[API] JSON parse error:', parseError, 'Text:', text.substring(0, 100));
+      throw new Error(`Invalid JSON: ${(parseError as Error).message}`);
+    }
+  } catch (error) {
+    console.error('[API] parseJsonBody error:', error);
+    return { data: null, message: (error as Error).message };
   }
 }
+
 
 async function request(method: 'GET' | 'POST', endpoint: string, body?: unknown) {
   const token = await getToken();
   const path = normalizeEndpoint(endpoint);
   const sendAuth = shouldAttachAuth(path, token);
+  const isOtpEndpoint = isPublicOtpEndpoint(path);
 
-  if (isPublicOtpEndpoint(path)) {
-    console.log('[Law24 API] OTP request auth header omitted:', !sendAuth);
-  }
-
-  if (sendAuth && token) {
-    console.log('[Law24 API] AUTH HEADER: Bearer', token.slice(0, 20) + '...');
-  }
-
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const reqLog = {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(sendAuth && token ? { Authorization: `Bearer ${token.replace(/^Bearer\s+/i, '')}` } : {}),
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
+    endpoint,
+    path,
+    url: `${BASE_URL}${path}`,
+    isOtp: isOtpEndpoint,
+    hasAuth: sendAuth && !!token,
+    bodyKeys: body ? Object.keys(body as Record<string, unknown>) : [],
+  };
 
-  const { data, message } = await parseJsonBody(res);
+  console.log('[API REQUEST]', JSON.stringify(reqLog, null, 2));
 
-  const isAuthMe =
-    path === '/api/v1/auth/me' ||
-    path.endsWith('/auth/me');
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sendAuth && token ? { Authorization: `Bearer ${token.replace(/^Bearer\s+/i, '')}` } : {}),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
 
-  // 401 handling: log but DO NOT auto-logout.
-  // Auto-logout was causing a bounce-back loop because the dev bypass token
-  // ("dev_token_...") is not a signed JWT and any authenticated API call
-  // immediately returns 401, triggering emitUnauthorized → logout → login redirect.
-  // In production, swap this back to the stricter version.
-  if (res.status === 401) {
-    console.log('[Law24 API] 401 on', path, '— skipping auto-logout (dev mode)');
-    if (isAuthMe) return null;
-    // Don't throw — let callers handle gracefully.
-    return null;
+    console.log('[API RESPONSE] Status:', res.status, 'URL:', res.url);
+
+    const { data, message } = await parseJsonBody(res);
+
+    const isAuthMe =
+      path === '/api/v1/auth/me' ||
+      path.endsWith('/auth/me');
+
+    // 401 handling: log but DO NOT auto-logout.
+    // Auto-logout was causing a bounce-back loop because the dev bypass token
+    // ("dev_token_...") is not a signed JWT and any authenticated API call
+    // immediately returns 401, triggering emitUnauthorized → logout → login redirect.
+    // In production, swap this back to the stricter version.
+    if (res.status === 401) {
+      console.log('[Law24 API] 401 on', path, '— skipping auto-logout (dev mode)');
+      if (isAuthMe) return null;
+      // Don't throw — let callers handle gracefully.
+      return null;
+    }
+
+    if (!res.ok) {
+      const errorMsg = message ?? `Request failed: ${res.status}`;
+      console.error('[API ERROR] Status:', res.status, 'Message:', errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    console.log('[API SUCCESS]', path, 'Data:', JSON.stringify(data).substring(0, 200));
+    return data;
+  } catch (error) {
+    console.error('[API EXCEPTION]', path, error);
+    throw error;
   }
-
-  if (!res.ok) {
-    throw new Error(message ?? `Request failed: ${res.status}`);
-  }
-
-  return data;
 }
 
 export async function apiGet(endpoint: string) {

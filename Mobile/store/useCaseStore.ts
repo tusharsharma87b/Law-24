@@ -619,7 +619,7 @@ export const useCaseStore = create<CaseState>((set, get) => ({
           date: nextDoc.createdAt,
           type: 'document',
         };
-        return applyLifecycleStatus({ ...c, documents: [nextDoc, ...(c.documents ?? [])], events: [event, ...(c.events ?? [])] });
+        return applyLifecycleStatus({ ...c, documents: [nextDoc, ...((c.documents ?? []) as any)] as any, events: [event, ...(c.events ?? [])] });
       });
       persistCases(nextCases);
       return { cases: nextCases };
@@ -629,7 +629,7 @@ export const useCaseStore = create<CaseState>((set, get) => ({
     set((state) => {
       const nextCases = state.cases.map((c) => {
         if (c.id !== caseId) return c;
-        return applyLifecycleStatus({ ...c, documents: (c.documents ?? []).filter((d: CaseDocument) => d.id !== docId) });
+        return applyLifecycleStatus({ ...c, documents: ((c.documents ?? []) as any).filter((d: any) => d.id !== docId) });
       });
       persistCases(nextCases);
       return { cases: nextCases };
@@ -639,8 +639,8 @@ export const useCaseStore = create<CaseState>((set, get) => ({
     set((state) => {
       const nextCases = state.cases.map((c) => {
         if (c.id !== caseId) return c;
-        const docs = (c.documents ?? []).map((d: CaseDocument) => (d.id === docId ? { ...d, ...patch } : d));
-        return applyLifecycleStatus({ ...c, documents: docs });
+        const docs = ((c.documents ?? []) as any).map((d: any) => (d.id === docId ? { ...d, ...patch } : d));
+        return applyLifecycleStatus({ ...c, documents: docs as any });
       });
       persistCases(nextCases);
       return { cases: nextCases };

@@ -1,11 +1,11 @@
 /**
- * Case OS — redesigned for layman users.
+ * Case OS ï¿½ redesigned for layman users.
  *
  * Design principles:
- *  • One screen = one case in focus
- *  • Show "what to do next" — not just status
- *  • Plain English everywhere, no legal jargon
- *  • Every section has a clear action button
+ *  ï¿½ One screen = one case in focus
+ *  ï¿½ Show "what to do next" ï¿½ not just status
+ *  ï¿½ Plain English everywhere, no legal jargon
+ *  ï¿½ Every section has a clear action button
  */
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
@@ -39,10 +39,10 @@ function getFriendlyName(c: AnyCase): string {
   if (t.includes('wrongful') || t.includes('terminat')) return 'Job\nTermination';
   if (t.includes('divorce'))                            return 'Divorce';
   if (t.includes('custody'))                            return 'Child\nCustody';
-  return (c.chips[0] ?? c.title.split('—')[0].trim()).slice(0, 14);
+  return (c.chips[0] ?? c.title.split('ï¿½')[0].trim()).slice(0, 14);
 }
 
-/** Friendly category header — "Matrimonial Cases" not "matrimonial" */
+/** Friendly category header ï¿½ "Matrimonial Cases" not "matrimonial" */
 function getCategoryLabel(cat: string): string {
   const map: Record<string, string> = {
     matrimonial: 'Matrimonial Cases',
@@ -59,7 +59,7 @@ function getCategoryLabel(cat: string): string {
   return map[cat] ?? 'My Cases';
 }
 
-/** Days until next hearing — plain language */
+/** Days until next hearing ï¿½ plain language */
 function getDaysUntil(dateStr: string | undefined): string {
   if (!dateStr) return '';
   const months: Record<string, number> = {
@@ -221,7 +221,7 @@ function WhatToDoTab({
           { icon: 'emoji-events', color: Colors.gold, top: `${c.successProbability}%`, bot: 'Winning Chance' },
           { icon: 'timeline',     color: Colors.primary, top: c.stage ?? 'Filing', bot: 'Current Stage' },
           { icon: 'folder',       color: Colors.success, top: c.caseNumber ?? 'Pending', bot: 'Case Number' },
-          { icon: 'update',       color: Colors.blue, top: c.nextHearing ?? '—', bot: 'Next Hearing' },
+          { icon: 'update',       color: Colors.blue, top: c.nextHearing ?? 'ï¿½', bot: 'Next Hearing' },
         ].map((st) => (
           <View key={st.bot} style={td.statusCard}>
             <View style={[td.statusIcon, { backgroundColor: st.color + '1A' }]}>
@@ -233,7 +233,7 @@ function WhatToDoTab({
         ))}
       </View>
 
-      {/* -- Pending actions — plain language -- */}
+      {/* -- Pending actions ï¿½ plain language -- */}
       {c.pendingActions?.length > 0 && (
         <View style={td.section}>
           <Text style={td.sectionTitle}>Things You Must Do</Text>
@@ -258,7 +258,7 @@ function WhatToDoTab({
         </View>
       )}
 
-      {/* -- AI guidance — plain language -- */}
+      {/* -- AI guidance ï¿½ plain language -- */}
       {c.aiStrategy && (
         <View style={td.aiCard}>
           <View style={td.aiHeader}>
@@ -430,7 +430,7 @@ function inferFolderFromDoc(doc: any): EvidenceFolder {
 
 function formatFileSize(size: unknown): string {
   const bytes = typeof size === 'number' && Number.isFinite(size) ? size : Number(size);
-  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+  if (!Number.isFinite(bytes) || bytes <= 0) return 'ï¿½';
   if (bytes < 1024) return `${bytes} B`;
   const kb = bytes / 1024;
   if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
@@ -559,7 +559,7 @@ function DocsTab({
                 <View style={{ flex: 1 }}>
                   <Text style={dc.docName} numberOfLines={1}>{doc.name}</Text>
                   <Text style={dc.docMeta}>
-                    {formatFileSize(doc.size)} · {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')}
+                    {formatFileSize(doc.size)} ï¿½ {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => onView(doc)} hitSlop={8}>
@@ -683,7 +683,7 @@ function DocsTab({
               <View style={{ flex: 1 }}>
                 <Text style={dc.docName} numberOfLines={1}>{doc.name}</Text>
                 <Text style={dc.docMeta}>
-                  {formatFileSize(doc.size)} · {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')} · Uploaded by {doc.uploadedBy === 'lawyer' ? 'Lawyer' : 'User'}
+                  {formatFileSize(doc.size)} ï¿½ {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')} ï¿½ Uploaded by {doc.uploadedBy === 'lawyer' ? 'Lawyer' : 'User'}
                 </Text>
                 <View style={dc.tagRow}>
                   {(doc.tags ?? []).slice(0, 3).map((t: string) => (
@@ -776,7 +776,7 @@ function DocsTab({
                 <Text style={dc.uploadOptionTxt}>{opt.label}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={dc.tagHint}>Suggested tags: {EVIDENCE_TAG_SUGGESTIONS.join(' • ')}</Text>
+            <Text style={dc.tagHint}>Suggested tags: {EVIDENCE_TAG_SUGGESTIONS.join(' ï¿½ ')}</Text>
             <TouchableOpacity style={dc.closeUploadBtn} onPress={() => setShowUploadModal(false)} activeOpacity={0.85}>
               <Text style={dc.closeUploadTxt}>Cancel</Text>
             </TouchableOpacity>
@@ -796,7 +796,7 @@ function AskAITab({ c }: { c: AnyCase }) {
     `How strong is my case right now?`,
     'Explain what happened in simple words',
     'What will the judge look at?',
-    `How long will ${c.title.split('—')[0].trim()} take?`,
+    `How long will ${c.title.split('ï¿½')[0].trim()} take?`,
   ];
   return (
     <View style={ai.root}>
@@ -804,7 +804,7 @@ function AskAITab({ c }: { c: AnyCase }) {
         <View style={ai.bannerIcon}><MaterialIcons name="auto-awesome" size={22} color={Colors.gold} /></View>
         <View style={{ flex: 1 }}>
           <Text style={ai.bannerTitle}>Ask Anything About Your Case</Text>
-          <Text style={ai.bannerSub}>AI trained on Indian law — answers in plain English</Text>
+          <Text style={ai.bannerSub}>AI trained on Indian law ï¿½ answers in plain English</Text>
         </View>
       </View>
       <Text style={ai.stratLabel}>AI says right now:</Text>
@@ -917,7 +917,7 @@ function YourLawyerTab({
           <Text style={lw.desig}>{l?.designation ?? 'Advocate'}</Text>
           <View style={lw.ratingRow}>
             <MaterialIcons name="star" size={12} color={Colors.gold} />
-            <Text style={lw.rating}>{l?.rating?.average ?? '—'}</Text>
+            <Text style={lw.rating}>{l?.rating?.average ?? 'ï¿½'}</Text>
             <Text style={lw.ratingCount}>({l?.rating?.totalReviews ?? 0} reviews)</Text>
             <View style={lw.metaDot} />
             <Text style={lw.exp}>{l?.experienceYears ?? 0} years experience</Text>
@@ -944,9 +944,9 @@ function YourLawyerTab({
       {/* Stats */}
       <View style={lw.statsRow}>
         {[
-          { v: `${l?.cases?.winRatePercent ?? '—'}%`, l: 'Win Rate' },
-          { v: `${l?.cases?.total ?? '—'}+`, l: 'Cases Handled' },
-          { v: `${l?.experienceYears ?? '—'} yrs`, l: 'Experience' },
+          { v: `${l?.cases?.winRatePercent ?? 'ï¿½'}%`, l: 'Win Rate' },
+          { v: `${l?.cases?.total ?? 'ï¿½'}+`, l: 'Cases Handled' },
+          { v: `${l?.experienceYears ?? 'ï¿½'} yrs`, l: 'Experience' },
         ].map((st, i, arr) => (
           <React.Fragment key={st.l}>
             <View style={lw.statItem}>
@@ -977,7 +977,7 @@ function YourLawyerTab({
         {activeReviewTicket && (
           <View style={lw.reviewBadge}>
             <Text style={lw.reviewBadgeTxt}>
-              Review in progress (ETA: 48h) • {activeReviewTicket.status}
+              Review in progress (ETA: 48h) ï¿½ {activeReviewTicket.status}
             </Text>
           </View>
         )}
@@ -1150,7 +1150,7 @@ export default function CaseDetailScreen() {
     if (!activeCase?.id) throw new Error('Missing case');
     const ticketId = createLawyerReviewTicket({
       caseId: activeCase.id,
-      lawyerId: activeCase?.lawyer?.id ?? activeCase?.lawyer?.lawyerId,
+      lawyerId: activeCase?.lawyer?.id ?? (activeCase?.lawyer as any)?.lawyerId,
       reason,
       note,
     });
@@ -1225,13 +1225,13 @@ export default function CaseDetailScreen() {
     if (!activeCase?.id) throw new Error('Missing case');
     const ticketId = createLawyerReviewTicket({
       caseId: activeCase.id,
-      lawyerId: activeCase?.lawyer?.id ?? activeCase?.lawyer?.lawyerId,
+      lawyerId: activeCase?.lawyer?.id ?? (activeCase?.lawyer as any)?.lawyerId,
       reason: 'Own lawyer added',
       note: `${name} (${phone})`,
     });
     addEvent(activeCase.id, {
       title: 'Own Lawyer Added for Verification',
-      description: `${name} (${phone})${firm ? ` • ${firm}` : ''}${email ? ` • ${email}` : ''}`,
+      description: `${name} (${phone})${firm ? ` ï¿½ ${firm}` : ''}${email ? ` ï¿½ ${email}` : ''}`,
       date: new Date().toISOString(),
       type: 'support',
     });

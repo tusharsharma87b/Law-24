@@ -9,8 +9,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function LegalInsightScreen() {
-  const { query } = useLocalSearchParams<{ query: string }>();
+  const { query, category } = useLocalSearchParams<{ query: string; category?: string }>();
   const router = useRouter();
+
+  // Map category parameter for lawyer filtering
+  const getCategoryFilter = () => {
+    if (!category) return undefined;
+    const categoryMap: Record<string, string> = {
+      'criminal': 'criminal',
+      'family': 'family',
+      'property': 'property',
+      'employment': 'employment',
+      'civil': 'civil',
+      'corporate': 'corporate',
+    };
+    return categoryMap[category] || category;
+  };
 
   const insight = useMemo(() => ({
     title: query,
@@ -105,7 +119,13 @@ export default function LegalInsightScreen() {
 
           <TouchableOpacity 
             style={s.lawyerBtn} 
-            onPress={() => router.push('/(tabs)/lawyers')}
+            onPress={() => {
+              const categoryFilter = getCategoryFilter();
+              router.push({
+                pathname: '/(tabs)/lawyers',
+                params: categoryFilter ? { category: categoryFilter } : {},
+              });
+            }}
             activeOpacity={0.8}
           >
             <View style={[s.btnIconBox, { backgroundColor: 'rgba(79,110,247,0.1)' }]}>

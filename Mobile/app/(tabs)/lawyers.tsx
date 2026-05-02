@@ -10,37 +10,53 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { LawyerCard } from '../../components/lawyer/LawyerCard';
+import { LawyerCard, mapLawyerToCardModel } from '../../components/lawyer/LawyerCard';
 import { LAWYERS } from '../../data/lawyers';
 
-const CATEGORIES = ['All', 'Criminal', 'Family', 'Corporate', 'Property', 'Civil', 'Employment'];
+const CATEGORIES = [
+  'All',
+  'Criminal Law',
+  'Family Law',
+  'Corporate Law',
+  'Property Law',
+  'Civil Law',
+  'Employment Law',
+];
 
 export default function LawyersScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ category?: string }>();
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState(params.category || 'All');
   const [activeSort, setActiveSort] = useState('rating');
 
+  const categoryLabelMap: Record<string, string> = {
+    criminal: 'Criminal Law',
+    family: 'Family Law',
+    property: 'Property Law',
+    employment: 'Employment Law',
+    civil: 'Civil Law',
+    corporate: 'Corporate Law',
+  };
+
+  const [activeCategory, setActiveCategory] = useState(
+    params.category ? categoryLabelMap[params.category] || params.category : 'All',
+  );
+
   useEffect(() => {
-    if (params.category) {
-      setActiveCategory(params.category);
-    }
+    setActiveCategory(params.category ? categoryLabelMap[params.category] || params.category : 'All');
   }, [params.category]);
 
-  const filteredData = useMemo(() => {
-    // Phase 1: Simple stability - bypass broken filter utility
-    return LAWYERS.filter((l) => {
-      const matchCat = activeCategory === 'All' || l.expertise.includes(activeCategory);
-      const matchSearch = l.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchCat && matchSearch;
+  const filteredLawyers = useMemo(() => {
+    return LAWYERS.filter((lawyer) => {
+      if (activeCategory === 'All') return true;
+      return lawyer.expertise === activeCategory;
     });
-  }, [activeCategory, searchQuery]);
+  }, [activeCategory]);
 
   const renderItem = ({ item }: { item: typeof LAWYERS[0] }) => (
     <LawyerCard
-      lawyer={item}
+      data={mapLawyerToCardModel(item as any)}
       onPress={() => router.push({
         pathname: "/lawyer/[id]",
         params: { id: item.id }

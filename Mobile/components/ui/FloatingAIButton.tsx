@@ -121,7 +121,6 @@ export default function FloatingAIButton() {
           activeOpacity={0.8} 
           onPress={handlePress} 
           style={styles.touch}
-          pointerEvents="auto"
         >
           <LinearGradient colors={['#7C6CF8', '#4A6CF7']} style={styles.btn}>
             <MaterialIcons name="auto-awesome" size={28} color="#fff" />
@@ -140,13 +139,11 @@ export default function FloatingAIButton() {
           { transform: pan.getTranslateTransform() }
         ]}
         {...panResponder.panHandlers}
-        pointerEvents="auto"
       >
         <TouchableOpacity 
           activeOpacity={0.8} 
           onPress={handlePress}
           style={styles.touch}
-          pointerEvents="auto"
         >
           <LinearGradient
             colors={['#7C6CF8', '#4A6CF7']}

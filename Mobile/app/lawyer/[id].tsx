@@ -868,7 +868,7 @@ export default function LawyerProfileScreen() {
     }
   }, [bookingTranslateY, showBooking]);
 
-  if (!id) {
+  if (!normalizedId) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: 'center', alignItems: 'center' }}>
         <Text style={{ color: Colors.textSecondary }}>Invalid Lawyer ID</Text>
@@ -877,10 +877,6 @@ export default function LawyerProfileScreen() {
         </TouchableOpacity>
       </View>
     );
-  }
-
-  if (!normalizedId) {
-    return <EmptyState message="Invalid lawyer profile ID. No ID provided." />;
   }
 
   if (!lawyer) {

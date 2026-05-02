@@ -177,7 +177,7 @@ function LawyerPanel({
   const oldRate = Number(active?.lawyer?.rate ?? active?.lawyer?.price ?? 0);
   const activeTicket = (active?.tickets ?? []).find((t: any) => t.type === 'lawyer_review' && (t.status === 'OPEN' || t.status === 'RESOLVED'));
   const selectedLawyer = !useOwn ? recommended.find((l) => l.id === selectedId) : null;
-  const newRate = useOwn ? oldRate : Number(selectedLawyer?.price ?? selectedLawyer?.rate ?? 0);
+  const newRate = useOwn ? oldRate : Number(selectedLawyer?.price ?? (selectedLawyer as any)?.rate ?? 0);
   const difference = Math.max(0, newRate - oldRate);
   const replacementRecommended = activeTicket?.status === 'RESOLVED' && activeTicket?.resolution === 'Replacement recommended';
   const firstFreeAvailable = !active?.freeReplacementUsed;

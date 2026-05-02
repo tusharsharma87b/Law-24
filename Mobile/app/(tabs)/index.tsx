@@ -18,10 +18,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { LAWYERS } from '../../data/lawyers';
 import { useAuthStore } from '../../store/useAuthStore';
 import { SectionHeader } from '../../components/ui/SectionHeader';
+import { LawyerCard, mapLawyerToCardModel } from '../../components/lawyer/LawyerCard';
 import { resolveSearchIntent, SEARCH_PLACEHOLDERS } from '../../constants/searchIntentMap';
 import { NotificationSheet } from '../../components/notifications/NotificationSheet';
 import { useUnreadCount } from '../../store/useNotificationStore';
@@ -101,7 +103,7 @@ export default function HomeScreen() {
   const [activeCategory, setActiveCategory] = useState(0);
 
   const liveExperts = LAWYERS.filter((l) => l.isOnline);
-  const topRated = [...LAWYERS].sort((a, b) => b.rating - a.rating);
+  const topRated = [...LAWYERS].sort((a, b) => b.rating.average - a.rating.average);
 
   const [searchText, setSearchText] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -394,7 +396,7 @@ export default function HomeScreen() {
                       ]}
                     >
                       <LawyerCard
-                        lawyer={item}
+                        data={mapLawyerToCardModel(item as any)}
                         onPress={() => {
                           router.push({ pathname: '/lawyer/[id]', params: { id: String(item.id) } });
                         }}
@@ -451,7 +453,7 @@ export default function HomeScreen() {
                       ]}
                     >
                       <LawyerCard
-                        lawyer={item}
+                        data={mapLawyerToCardModel(item as any)}
                         onPress={() => {
                           router.push({ pathname: '/lawyer/[id]', params: { id: String(item.id) } });
                         }}

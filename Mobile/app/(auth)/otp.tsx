@@ -73,46 +73,75 @@ export default function OtpScreen() {
 
   const handleVerify = async (code?: string) => {
     const fullOtp = (code ?? otp.join('')).trim();
-    if (fullOtp.length < OTP_LENGTH) { shake(); setError('Enter the 6-digit OTP.'); return; }
+    if (fullOtp.length < OTP_LENGTH) { 
+      shake(); 
+      setError('Enter the 6-digit OTP.'); 
+      return; 
+    }
 
     setError(null);
     setLoading(true);
     const target = String(value ?? '').trim();
-    console.log('OTP SENT:', fullOtp);
+    
+    console.log('[OTP Screen] ==== VERIFY OTP START ====');
+    console.log('[OTP Screen] Target:', target);
+    console.log('[OTP Screen] Code:', fullOtp);
+    console.log('[OTP Screen] Type:', type);
 
     let result: any;
     try {
       if (fullOtp === '123456') {
+        console.log('[OTP Screen] Using dev bypass (123456)');
         result = { verifySuccess: true, authMeOk: true, accessToken: 'temp-token-123456' };
       } else {
+        console.log('[OTP Screen] Calling verifyOtp API...');
         result = await verifyOtp(target, fullOtp);
       }
+      console.log('[OTP Screen] API result:', JSON.stringify(result).substring(0, 300));
     } catch (error) {
-      console.error('[Law24 Auth] OTP verification failed:', error);
+      console.error('[OTP Screen] OTP verification API call failed:', error);
+      console.error('[OTP Screen] Error message:', (error as Error).message);
+      console.error('[OTP Screen] Error stack:', (error as Error).stack);
       shake();
-      setError('Invalid OTP. Please try again.');
+      setError((error as Error).message || 'Invalid OTP. Please try again.');
       setLoading(false);
       return;
     }
 
     try {
-      console.log('VERIFY RESPONSE:', result);
+      console.log('[OTP Screen] Processing OTP response...');
+      console.log('[OTP Screen] VERIFY RESPONSE:', JSON.stringify(result).substring(0, 500));
+      
       const token = result?.accessToken || result?.token || pickAccessToken(result);
+      console.log('[OTP Screen] Extracted token:', token ? token.substring(0, 20) + '...' : 'NONE');
+      
       const isSuccess = Boolean(result?.verifySuccess || result?.authMeOk || token);
+      console.log('[OTP Screen] isSuccess:', isSuccess);
+      console.log('[OTP Screen] Success flags - verifySuccess:', result?.verifySuccess, 'authMeOk:', result?.authMeOk);
 
       if (!isSuccess) {
-        console.log('OTP FAILED', result);
+        console.error('[OTP Screen] OTP FAILED - no success indicator found', { result });
         setError('Invalid OTP. Please try again.');
         shake();
+        setLoading(false);
         return;
       }
 
-      console.log('OTP SUCCESS');
+      console.log('[OTP Screen] OTP SUCCESS - token exists');
       setError(null);
 
       if (token) {
-        await AsyncStorage.setItem("law24_access_token", token);
-        console.log("TOKEN SAVED:", token);
+        try {
+          await AsyncStorage.setItem("law24_access_token", token);
+          console.log("[OTP Screen] TOKEN SAVED successfully");
+        } catch (storageErr) {
+          console.error("[OTP Screen] Failed to save token to AsyncStorage:", storageErr);
+          setError('Failed to save session. Please try again.');
+          setLoading(false);
+          return;
+        }
+      } else {
+        console.warn('[OTP Screen] No token available after OTP verification');
       }
 
       const user = {
@@ -126,26 +155,42 @@ export default function OtpScreen() {
         token: token,
       };
 
+      console.log("[OTP Screen] Setting auth store with user:", JSON.stringify(user).substring(0, 200));
       useAuthStore.getState().setUser(user);
-      console.log("OTP SUCCESS", token, user);
+      
+      console.log("[OTP Screen] Auth store updated - navigating to home");
+      console.log("[OTP Screen] ==== VERIFY OTP SUCCESS ====");
+      
+      setLoading(false);
       router.replace('/(tabs)');
     } catch (error) {
-      console.error('[Law24 Auth] OTP success handling failed:', error);
-    } finally {
+      console.error('[OTP Screen] OTP success handling failed:', error);
+      console.error('[OTP Screen] Error details:', (error as Error).message);
+      setError('Session setup failed. Please try again.');
       setLoading(false);
     }
   };
 
   const handleResend = async () => {
     if (resendCount >= 3) return;
+    
+    console.log('[OTP Screen] Resending OTP - Count:', resendCount);
+    const target = String(value ?? '').trim();
+    const channel = type === 'email' ? 'email' : 'phone';
+    
     try {
-      await sendOtp(String(value ?? ''), type === 'email' ? 'email' : 'phone');
+      console.log('[OTP Screen] Calling sendOtp for:', target, 'channel:', channel);
+      await sendOtp(target, channel);
+      
+      console.log('[OTP Screen] Resend OTP successful');
       setResendCount((c) => c + 1);
       setCountdown(RESEND_SECONDS);
       setOtp(Array(OTP_LENGTH).fill(''));
+      setError(null);
       inputRefs.current[0]?.focus();
-    } catch {
-      setError('Failed to resend OTP. Please try again.');
+    } catch (error) {
+      console.error('[OTP Screen] Resend OTP failed:', error);
+      setError((error as Error).message || 'Failed to resend OTP. Please try again.');
     }
   };
 

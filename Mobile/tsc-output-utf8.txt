@@ -1,0 +1,67 @@
+app/(tabs)/index.tsx(103,47): error TS2339: Property 'isOnline' does not exist on type '{ id: string; name: string; city: string; expertise: string; price: number; }'.
+app/(tabs)/index.tsx(104,50): error TS2339: Property 'rating' does not exist on type '{ id: string; name: string; city: string; expertise: string; price: number; }'.
+app/(tabs)/index.tsx(104,61): error TS2339: Property 'rating' does not exist on type '{ id: string; name: string; city: string; expertise: string; price: number; }'.
+app/(tabs)/index.tsx(187,20): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(191,20): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(202,16): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(237,18): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(289,28): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(309,22): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(323,22): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(327,22): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(331,22): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(342,20): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(396,24): error TS2304: Cannot find name 'LawyerCard'.
+app/(tabs)/index.tsx(453,24): error TS2304: Cannot find name 'LawyerCard'.
+app/(tabs)/index.tsx(493,26): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(499,24): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(514,26): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(520,24): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(544,24): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(553,24): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(559,24): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(565,22): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(569,24): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/index.tsx(575,22): error TS2304: Cannot find name 'MaterialIcons'.
+app/(tabs)/lawyers.tsx(43,7): error TS2322: Type '{ lawyer: { id: string; name: string; city: string; expertise: string; price: number; }; onPress: () => void; }' is not assignable to type 'IntrinsicAttributes & Props'.
+  Property 'lawyer' does not exist on type 'IntrinsicAttributes & Props'.
+app/case/[id].tsx(1153,63): error TS2339: Property 'lawyerId' does not exist on type 'Lawyer'.
+app/case/[id].tsx(1228,63): error TS2339: Property 'lawyerId' does not exist on type 'Lawyer'.
+app/lawyer/[id].tsx(871,8): error TS2304: Cannot find name 'id'.
+app/legal-search.tsx(34,45): error TS2339: Property 'trim' does not exist on type 'never'.
+components/case/CaseActionsSheet.tsx(180,86): error TS2339: Property 'rate' does not exist on type 'CategoryLawyer'.
+components/DateField.tsx(136,14): error TS2367: This comparison appears to be unintentional because the types '"ios" | "android" | "macos" | "windows"' and '"web"' have no overlap.
+components/ui/FloatingAIButton.tsx(124,11): error TS2322: Type '{ children: Element; activeOpacity: number; onPress: () => void; style: { width: number; height: number; borderRadius: number; shadowColor: string; shadowOffset: { width: number; height: number; }; shadowOpacity: number; shadowRadius: number; }; pointerEvents: string; }' is not assignable to type 'IntrinsicAttributes & TouchableOpacityProps & RefAttributes<View>'.
+  Property 'pointerEvents' does not exist on type 'IntrinsicAttributes & TouchableOpacityProps & RefAttributes<View>'.
+components/ui/FloatingAIButton.tsx(149,11): error TS2322: Type '{ children: Element; activeOpacity: number; onPress: () => void; style: { width: number; height: number; borderRadius: number; shadowColor: string; shadowOffset: { width: number; height: number; }; shadowOpacity: number; shadowRadius: number; }; pointerEvents: string; }' is not assignable to type 'IntrinsicAttributes & TouchableOpacityProps & RefAttributes<View>'.
+  Property 'pointerEvents' does not exist on type 'IntrinsicAttributes & TouchableOpacityProps & RefAttributes<View>'.
+store/useCaseStore.ts(622,57): error TS2322: Type 'CaseDocument' is not assignable to type '{ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | ... 7 more ... | { ...; }'.
+  Type 'CaseDocument' is missing the following properties from type '{ id: string; name: string; category: "evidence"; uploadedBy: string; date: string; size: string; }': category, date
+store/useCaseStore.ts(632,37): error TS2345: Argument of type '{ documents: ({ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; })[]; ... 21 more ...; lawyer: Lawyer; } | { ...; } | { ...; } | { ...; }' is not assignable to parameter of type 'CaseRecord'.
+  Type '{ documents: ({ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; })[]; ... 21 more ...; lawyer: Lawyer; }' is not assignable to type 'CaseRecord'.
+    Type '{ documents: ({ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; })[]; ... 21 more ...; lawyer: Lawyer; }' is not assignable to type '({ id: string; category: string; title: string; chips: string[]; type: string; successProbability: number; urgency: "high"; stage: string; stages: string[]; activeStageIndex: number; court: string; ... 11 more ...; lawyer: Lawyer; } & Record<...>) | ({ ...; } & Record<...>)'.
+      Type '{ documents: ({ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; })[]; ... 21 more ...; lawyer: Lawyer; }' is not assignable to type '{ id: string; category: string; title: string; chips: string[]; type: string; successProbability: number; urgency: "high"; stage: string; stages: string[]; activeStageIndex: number; court: string; judge: string; ... 10 more ...; lawyer: Lawyer; } & Record<...>'.
+        Type '{ documents: ({ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; })[]; ... 21 more ...; lawyer: Lawyer; }' is not assignable to type '{ id: string; category: string; title: string; chips: string[]; type: string; successProbability: number; urgency: "high"; stage: string; stages: string[]; activeStageIndex: number; court: string; judge: string; ... 10 more ...; lawyer: Lawyer; }'.
+          Types of property 'timeline' are incompatible.
+            Type '({ id: string; date: string; time: string; type: "action"; title: string; desc: string; action: string; people: string[]; } | { id: string; date: string; time: string; type: "done"; title: string; desc: string; people: string[]; action?: undefined; } | { ...; })[]' is not assignable to type '({ id: string; date: string; time: string; type: "info"; title: string; desc: string; people: string[]; action?: undefined; } | { id: string; date: string; time: string; type: "urgent"; title: string; desc: string; action: string; people: string[]; })[]'.
+              Type '{ id: string; date: string; time: string; type: "action"; title: string; desc: string; action: string; people: string[]; } | { id: string; date: string; time: string; type: "done"; title: string; desc: string; people: string[]; action?: undefined; } | { ...; }' is not assignable to type '{ id: string; date: string; time: string; type: "info"; title: string; desc: string; people: string[]; action?: undefined; } | { id: string; date: string; time: string; type: "urgent"; title: string; desc: string; action: string; people: string[]; }'.
+                Type '{ id: string; date: string; time: string; type: "action"; title: string; desc: string; action: string; people: string[]; }' is not assignable to type '{ id: string; date: string; time: string; type: "info"; title: string; desc: string; people: string[]; action?: undefined; } | { id: string; date: string; time: string; type: "urgent"; title: string; desc: string; action: string; people: string[]; }'.
+                  Type '{ id: string; date: string; time: string; type: "action"; title: string; desc: string; action: string; people: string[]; }' is not assignable to type '{ id: string; date: string; time: string; type: "urgent"; title: string; desc: string; action: string; people: string[]; }'.
+                    Types of property 'type' are incompatible.
+                      Type '"action"' is not assignable to type '"urgent"'.
+store/useCaseStore.ts(632,83): error TS2345: Argument of type '(d: CaseDocument) => boolean' is not assignable to parameter of type '(value: { id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; }, index: number, array: ({ ...; } | ... 1 more ... | { ...; })[]) => unknown'.
+  Types of parameters 'd' and 'value' are incompatible.
+    Type '{ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; }' is not assignable to type 'CaseDocument'.
+      Type '{ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; }' is missing the following properties from type 'CaseDocument': type, format, caseId, caseTag, and 5 more.
+store/useCaseStore.ts(642,46): error TS2345: Argument of type '(d: CaseDocument) => CaseDocument' is not assignable to parameter of type '((value: { id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; }, index: number, array: ({ ...; } | ... 1 more ... | { ...; })[]) => CaseDocument) & ((value: { ......'.
+  Type '(d: CaseDocument) => CaseDocument' is not assignable to type '(value: { id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; }, index: number, array: ({ ...; } | ... 1 more ... | { ...; })[]) => CaseDocument'.
+    Types of parameters 'd' and 'value' are incompatible.
+      Type '{ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; }' is not assignable to type 'CaseDocument'.
+        Type '{ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; }' is missing the following properties from type 'CaseDocument': type, format, caseId, caseTag, and 5 more.
+store/useCaseStore.ts(643,45): error TS2322: Type 'CaseDocument[]' is not assignable to type '({ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; })[] | ({ ...; } | { ...; })[] | ({ ...; } | { ...; })[] | ({ ...; } | ... 1 more ... | { ...; })[]'.
+  Type 'CaseDocument[]' is not assignable to type '({ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; })[]'.
+    Type 'CaseDocument' is not assignable to type '{ id: string; name: string; category: "court"; uploadedBy: string; date: string; size: string; } | { id: string; name: string; category: "personal"; uploadedBy: string; date: string; size: string; } | { ...; }'.
+      Type 'CaseDocument' is missing the following properties from type '{ id: string; name: string; category: "evidence"; uploadedBy: string; date: string; size: string; }': category, date
+store/useWalletStore.ts(34,33): error TS2339: Property 'balance' does not exist on type '{}'.
+store/useWalletStore.ts(35,45): error TS2339: Property 'transactions' does not exist on type '{}'.
+store/useWalletStore.ts(35,68): error TS2339: Property 'transactions' does not exist on type '{}'.

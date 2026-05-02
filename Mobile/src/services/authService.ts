@@ -29,28 +29,81 @@ type SendOtpResponse = {
 };
 
 export async function sendOtp(target: string, channel: 'phone' | 'email' = 'phone'): Promise<SendOtpResponse> {
-  const data = await apiPost('/auth/send-otp', {
-    target: target.trim(),
-    channel,
-    purpose: 'login',
-  });
-  return data as SendOtpResponse;
+  try {
+    console.log('[AuthService] Sending OTP to:', target, 'channel:', channel);
+    
+    const payload = {
+      target: target.trim(),
+      channel,
+      purpose: 'login',
+    };
+    
+    console.log('[AuthService] SendOTP payload:', JSON.stringify(payload));
+    
+    const data = await apiPost('/auth/send-otp', payload);
+    
+    if (!data) {
+      throw new Error('No response from server');
+    }
+    
+    console.log('[AuthService] SendOTP response:', JSON.stringify(data).substring(0, 200));
+    
+    if (!(data as any).success) {
+      throw new Error((data as any).message || 'OTP request failed');
+    }
+    
+    return data as SendOtpResponse;
+  } catch (error) {
+    console.error('[AuthService] sendOtp error:', error);
+    throw error;
+  }
 }
 
 export async function verifyOtp(target: string, code: string): Promise<VerifyOtpResponse> {
-  const res = await apiPost('/auth/verify-otp', {
-    target: target.trim(),
-    code: code.trim(),
-    purpose: 'login',
-  });
+  try {
+    console.log('[AuthService] Verifying OTP for target:', target);
+    
+    const payload = {
+      target: target.trim(),
+      code: code.trim(),
+      purpose: 'login',
+    };
+    
+    console.log('[AuthService] VerifyOTP payload:', JSON.stringify(payload));
+    
+    const res = await apiPost('/auth/verify-otp', payload);
+    
+    console.log('[AuthService] VERIFY OTP RESPONSE:', JSON.stringify(res).substring(0, 300));
+    
+    if (!res) {
+      throw new Error('No response from server');
+    }
 
-  console.log('VERIFY OTP RESPONSE:', res);
+    const response = res as VerifyOtpResponse;
+    
+    // Check for success indicators
+    const hasSuccess = response?.success || response?.verifySuccess;
+    if (!hasSuccess && !pickAccessToken(response)) {
+      throw new Error(response ? 'OTP verification failed' : 'Invalid server response');
+    }
 
-  return res as VerifyOtpResponse;
+    return response;
+  } catch (error) {
+    console.error('[AuthService] verifyOtp error:', error);
+    throw error;
+  }
 }
 
 export async function getMe() {
-  return apiGet('/auth/me');
+  try {
+    console.log('[AuthService] Fetching current user');
+    const data = await apiGet('/auth/me');
+    console.log('[AuthService] getMe response:', data);
+    return data;
+  } catch (error) {
+    console.error('[AuthService] getMe error:', error);
+    throw error;
+  }
 }
 
 export async function loginWithGoogle(): Promise<never> {

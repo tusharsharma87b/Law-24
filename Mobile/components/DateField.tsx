@@ -133,7 +133,7 @@ export default function DateField({
               borderTopRightRadius: 20,
             }}
           >
-            {Platform.OS !== 'web' ? (
+            {(Platform.OS === 'ios' || Platform.OS === 'android') ? (
               <View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <TouchableOpacity onPress={() => setCurrentMonth((prev) => shiftMonth(prev, -1))}>
