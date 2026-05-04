@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   View,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { LawyerCard, mapLawyerToCardModel } from '../../components/lawyer/LawyerCard';
-import { LAWYERS } from '../../data/lawyers';
+import { useLawyerDataStore } from '../../store/useLawyerDataStore';
 
 const CATEGORIES = [
   'All',
@@ -43,9 +44,19 @@ export default function LawyersScreen() {
     minExperience: 0,
   });
 
+  // Lawyer data from store (fetched from backend)
+  const { featuredLawyers, hydrateLawyerData, isHydrating } = useLawyerDataStore();
+  const lawyers = featuredLawyers || [];
+
+  useEffect(() => {
+    hydrateLawyerData();
+  }, []);
+
   const filteredLawyers = useMemo(() => {
-    let result = LAWYERS.filter((lawyer) => {
-      if (activeCategory !== 'All' && lawyer.expertise !== activeCategory) {
+    let result = lawyers.filter((lawyer) => {
+      // Determine expertise from first specialization
+      const expertise = lawyer.specializations[0] || 'General Law';
+      if (activeCategory !== 'All' && expertise !== activeCategory) {
         return false;
       }
 
@@ -54,8 +65,8 @@ export default function LawyersScreen() {
         return false;
       }
 
-      // Online only filter
-      if (filters.onlineOnly && lawyer.availability !== 'online') {
+      // Online only filter: use isOnline boolean
+      if (filters.onlineOnly && !lawyer.isOnline) {
         return false;
       }
 
@@ -69,7 +80,7 @@ export default function LawyersScreen() {
         const query = searchQuery.toLowerCase();
         return (
           lawyer.name.toLowerCase().includes(query) ||
-          lawyer.expertise.toLowerCase().includes(query) ||
+          expertise.toLowerCase().includes(query) ||
           lawyer.specializations.some(s => s.toLowerCase().includes(query))
         );
       }
@@ -89,7 +100,38 @@ export default function LawyersScreen() {
     return result;
   }, [activeCategory, filters, searchQuery, activeSort]);
 
-  const renderItem = ({ item }: { item: typeof LAWYERS[0] }) => (
+  // Section data computation
+  const sectionData = useMemo(() => {
+    // Recommended Lawyers: Top rated + online
+    const recommendedLawyers = lawyers
+      .filter(lawyer => lawyer.rating.average >= 4.5 && lawyer.isOnline)
+      .slice(0, 8);
+
+    // Your Lawyers (previously consulted): Mock data - lawyers with IDs 1-4
+    const yourLawyers = lawyers
+      .filter(lawyer => ['1', '2', '3', '4'].includes(lawyer.id))
+      .slice(0, 6);
+
+    // Recent Conversations: Lawyers with high response time
+    const recentConversations = lawyers
+      .filter(lawyer => lawyer.responseTimeMinutes <= 5)
+      .sort((a, b) => a.responseTimeMinutes - b.responseTimeMinutes)
+      .slice(0, 6);
+
+    // Top Rated: Highest rated lawyers
+    const topRatedLawyers = [...lawyers]
+      .sort((a, b) => b.rating.average - a.rating.average)
+      .slice(0, 8);
+
+    return {
+      recommendedLawyers,
+      yourLawyers,
+      recentConversations,
+      topRatedLawyers,
+    };
+  }, [lawyers]);
+
+  const renderItem = ({ item }: { item: typeof lawyers[0] }) => (
     <LawyerCard
       data={mapLawyerToCardModel(item as any)}
       onPress={() => router.push({
@@ -98,6 +140,45 @@ export default function LawyersScreen() {
       })}
     />
   );
+
+  const renderHorizontalSection = (title: string, data: typeof lawyers) => (
+    <View style={styles.sectionContainer}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <TouchableOpacity>
+          <Text style={styles.sectionSeeAll}>See all</Text>
+        </TouchableOpacity>
+      </View>
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={data}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.horizontalListContent}
+      />
+    </View>
+  );
+
+  // Show loading indicator while hydrating and no lawyers yet
+  if (isHydrating && lawyers.length === 0) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <MaterialIcons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.title}>Find an Expert</Text>
+          </View>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4F46E5" />
+          <Text style={styles.loadingText}>Loading lawyers...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.root}>
@@ -108,20 +189,25 @@ export default function LawyersScreen() {
           </TouchableOpacity>
           <Text style={styles.title}>Find an Expert</Text>
         </View>
-        <View style={styles.searchBar}>
-          <MaterialIcons name="search" size={20} color="#64748B" />
-          <TextInput
-            placeholder="Search by name or specialization..."
-            placeholderTextColor="#64748B"
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery !== '' && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <MaterialIcons name="close" size={20} color="#64748B" />
-            </TouchableOpacity>
-          )}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBar}>
+            <MaterialIcons name="search" size={20} color="#64748B" />
+            <TextInput
+              placeholder="Search by name or specialization..."
+              placeholderTextColor="#64748B"
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery !== '' && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <MaterialIcons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity style={styles.filterIconButton}>
+            <MaterialIcons name="filter-list" size={24} color="#fff" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -291,33 +377,56 @@ export default function LawyersScreen() {
         )}
       </ScrollView>
 
-      <FlatList
-        data={filteredLawyers}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialIcons name="search-off" size={64} color="#334155" />
-            <Text style={styles.emptyText}>No lawyers found matching your criteria.</Text>
-            <TouchableOpacity
-              style={styles.resetBtn}
-              onPress={() => {
-                setSearchQuery('');
-                setActiveCategory('All');
-                setFilters({
-                  minRating: 0,
-                  priceSort: 'none',
-                  onlineOnly: false,
-                  minExperience: 0,
-                });
-              }}
-            >
-              <Text style={styles.resetBtnText}>Clear all filters</Text>
-            </TouchableOpacity>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.sectionsContainer}
+      >
+        {renderHorizontalSection('Recommended Lawyers', sectionData.recommendedLawyers)}
+        {renderHorizontalSection('Your Lawyers', sectionData.yourLawyers)}
+        {renderHorizontalSection('Recent Conversations', sectionData.recentConversations)}
+        {renderHorizontalSection('Top Rated', sectionData.topRatedLawyers)}
+        
+        {/* Show filtered results when searching */}
+        {searchQuery.trim() !== '' || activeCategory !== 'All' ||
+         filters.minRating > 0 || filters.priceSort !== 'none' ||
+         filters.onlineOnly || filters.minExperience > 0 ? (
+          <View style={styles.filteredResultsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Search Results</Text>
+              <Text style={styles.resultCount}>{filteredLawyers.length} lawyers</Text>
+            </View>
+            {filteredLawyers.length > 0 ? (
+              <FlatList
+                data={filteredLawyers}
+                keyExtractor={(item) => item.id}
+                renderItem={renderItem}
+                scrollEnabled={false}
+                contentContainerStyle={styles.verticalListContent}
+              />
+            ) : (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="search-off" size={64} color="#334155" />
+                <Text style={styles.emptyText}>No lawyers found matching your criteria.</Text>
+                <TouchableOpacity
+                  style={styles.resetBtn}
+                  onPress={() => {
+                    setSearchQuery('');
+                    setActiveCategory('All');
+                    setFilters({
+                      minRating: 0,
+                      priceSort: 'none',
+                      onlineOnly: false,
+                      minExperience: 0,
+                    });
+                  }}
+                >
+                  <Text style={styles.resetBtnText}>Clear all filters</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-        }
-      />
+        ) : null}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -349,7 +458,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#fff',
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1E293B',
@@ -357,6 +472,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 48,
     gap: 8,
+  },
+  filterIconButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchInput: {
     flex: 1,
@@ -408,6 +531,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
     gap: 6,
+    flexShrink: 0,
   },
   filterChipActive: {
     backgroundColor: '#4F46E520',
@@ -437,6 +561,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 100,
+    gap: 16,
+  },
+  loadingText: {
+    color: '#94A3B8',
+    fontSize: 16,
+    textAlign: 'center',
+  },
   listContent: {
     padding: 16,
     paddingBottom: 100,
@@ -464,5 +600,46 @@ const styles = StyleSheet.create({
   resetBtnText: {
     color: '#fff',
     fontWeight: '700',
+  },
+  // Section styles
+  sectionsContainer: {
+    paddingBottom: 100,
+  },
+  sectionContainer: {
+    marginTop: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  sectionSeeAll: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4F46E5',
+  },
+  resultCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  horizontalListContent: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  verticalListContent: {
+    paddingHorizontal: 16,
+    gap: 16,
+  },
+  filteredResultsSection: {
+    marginTop: 32,
+    marginBottom: 40,
   },
 });

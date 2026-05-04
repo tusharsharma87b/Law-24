@@ -6,6 +6,18 @@ import { requireAuth, type AuthRequest } from '../../middleware/auth.js';
 
 export const aiRouter = Router();
 
+// POST /ai-consult - Simple AI consultation endpoint
+aiRouter.post('/ai-consult', async (req, res) => {
+  // Accept any input but don't validate strictly for simplicity
+  const issue = req.body.issue || 'legal issue';
+  
+  // Return simple mock response
+  res.json({
+    summary: "This is a sample legal response",
+    suggestedLawyerType: "Corporate Lawyer"
+  });
+});
+
 aiRouter.post('/ai/search', async (req, res) => {
   const body = z.object({ query: z.string().min(2) }).parse(req.body);
   const q = body.query.toLowerCase();
