@@ -41,12 +41,41 @@ export default function FloatingAIButton() {
   const pan = useRef(new Animated.ValueXY({ x: defaultX, y: defaultY })).current;
   const posRef = useRef({ x: defaultX, y: defaultY });
   
+  // Breathing animation
+  const breathingAnim = useRef(new Animated.Value(1)).current;
+  
   useEffect(() => {
     if (IS_WEB) return;
     const listenerId = pan.addListener((v) => {
       posRef.current = v;
     });
     return () => pan.removeListener(listenerId);
+  }, [IS_WEB]);
+
+  // Start breathing animation
+  useEffect(() => {
+    if (IS_WEB) return;
+    
+    const breathing = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathingAnim, {
+          toValue: 1.08,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(breathingAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    
+    breathing.start();
+    
+    return () => {
+      breathing.stop();
+    };
   }, [IS_WEB]);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -117,15 +146,17 @@ export default function FloatingAIButton() {
   if (IS_WEB) {
     return (
       <View style={styles.webContainer} pointerEvents="box-none">
-        <TouchableOpacity 
-          activeOpacity={0.8} 
-          onPress={handlePress} 
-          style={styles.touch}
-        >
-          <LinearGradient colors={['#7C6CF8', '#4A6CF7']} style={styles.btn}>
-            <MaterialIcons name="auto-awesome" size={28} color="#fff" />
-          </LinearGradient>
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: breathingAnim }] }}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={handlePress}
+            style={styles.touch}
+          >
+            <LinearGradient colors={['#7C6CF8', '#4A6CF7']} style={styles.btn}>
+              <MaterialIcons name="auto-awesome" size={28} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
         <FloatingAIModal visible={modalVisible} onClose={() => setModalVisible(false)} />
       </View>
     );
@@ -140,23 +171,25 @@ export default function FloatingAIButton() {
         ]}
         {...panResponder.panHandlers}
       >
-        <TouchableOpacity 
-          activeOpacity={0.8} 
-          onPress={handlePress}
-          style={styles.touch}
-        >
-          <LinearGradient
-            colors={['#7C6CF8', '#4A6CF7']}
-            style={styles.btn}
+        <Animated.View style={{ transform: [{ scale: breathingAnim }] }}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={handlePress}
+            style={styles.touch}
           >
-            <MaterialIcons name="auto-awesome" size={28} color="#fff" />
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={['#7C6CF8', '#4A6CF7']}
+              style={styles.btn}
+            >
+              <MaterialIcons name="auto-awesome" size={28} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
       </Animated.View>
 
-      <FloatingAIModal 
-        visible={modalVisible} 
-        onClose={() => setModalVisible(false)} 
+      <FloatingAIModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
       />
     </View>
   );

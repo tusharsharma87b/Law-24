@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
 import type { Lawyer } from '../../constants/mockData';
@@ -94,7 +94,7 @@ export function LawyerCard({ data, onPress, onCtaPress }: Props) {
   return (
     <Pressable style={styles.cardContainer} onPress={onPress}>
       <LinearGradient
-        colors={['#0B1220', '#111827']}
+        colors={['#0B1220', '#111827', '#0B1220']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.card}
@@ -110,6 +110,11 @@ export function LawyerCard({ data, onPress, onCtaPress }: Props) {
             online={false} // we'll handle badge ourselves
           />
           {isOnline && <View style={styles.onlineDot} />}
+          {data.verified && (
+            <View style={styles.verifiedBadge}>
+              <Text style={styles.verifiedText}>✓</Text>
+            </View>
+          )}
         </View>
 
         {/* Main content */}
@@ -117,12 +122,14 @@ export function LawyerCard({ data, onPress, onCtaPress }: Props) {
           {/* Name row */}
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>{data.name}</Text>
-            {data.verified && <View style={styles.verifiedBadge} />}
+            <View style={styles.experienceBadge}>
+              <Text style={styles.experienceText}>{data.experience}y</Text>
+            </View>
           </View>
 
           {/* Details */}
           <Text style={styles.details}>
-            {data.city} • {data.specialization} • {data.experience} yrs exp
+            {data.city} • {data.specialization} • {data.courtLabel}
           </Text>
 
           {/* Rating & Price row */}
@@ -130,22 +137,28 @@ export function LawyerCard({ data, onPress, onCtaPress }: Props) {
             <View style={styles.ratingContainer}>
               <Text style={styles.ratingStar}>⭐</Text>
               <Text style={styles.ratingText}>{data.ratingAverage.toFixed(1)}</Text>
-              <Text style={styles.reviewCount}>({data.totalReviews})</Text>
+              <Text style={styles.reviewCount}>({data.totalReviews} reviews)</Text>
             </View>
-            <Text style={styles.price}>₹{data.chatPerMinuteInr}/min</Text>
+            <View style={styles.priceContainer}>
+              <Text style={styles.price}>₹{data.chatPerMinuteInr}</Text>
+              <Text style={styles.priceUnit}>/min</Text>
+            </View>
           </View>
 
-          {/* Availability */}
-          <Text style={[styles.availability, isOnline ? styles.onlineText : styles.offlineText]}>
-            {availabilityText}
-          </Text>
+          {/* Availability & Response Time */}
+          <View style={styles.availabilityRow}>
+            <View style={[styles.availabilityBadge, isOnline ? styles.onlineBadge : styles.offlineBadge]}>
+              <Text style={styles.availabilityText}>{availabilityText}</Text>
+            </View>
+            <Text style={styles.responseTime}>Response: {data.responseTimeMinutes} min</Text>
+          </View>
         </View>
       </LinearGradient>
 
       {/* CTA Button - separate Pressable to avoid triggering card press */}
       <Pressable style={styles.ctaContainer} onPress={handleCtaPress}>
         <LinearGradient
-          colors={['#7C3AED', '#6D28D9']}
+          colors={isOnline ? ['#7C3AED', '#6D28D9'] : ['#4B5563', '#374151']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.ctaButton}
@@ -163,16 +176,16 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.xl,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   card: {
     padding: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 180,
+    minHeight: 200,
   },
   avatarContainer: {
     position: 'relative',
@@ -180,15 +193,34 @@ const styles = StyleSheet.create({
   },
   onlineDot: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    top: 4,
+    right: 4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: Colors.success,
     borderWidth: 2,
     borderColor: '#0B1220',
     zIndex: 10,
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: '#0B1220',
+    zIndex: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verifiedText: {
+    color: Colors.textPrimary,
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,
@@ -196,32 +228,39 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: SPACING.xs,
   },
   name: {
     color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: 'bold',
-    marginRight: SPACING.xs,
+    flex: 1,
   },
-  verifiedBadge: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.primary,
-    borderWidth: 2,
-    borderColor: Colors.bgSecondary,
+  experienceBadge: {
+    backgroundColor: 'rgba(245, 166, 35, 0.15)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: Colors.goldSubtle,
+  },
+  experienceText: {
+    color: Colors.gold,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   details: {
     color: Colors.textSecondary,
     fontSize: 13,
     marginBottom: SPACING.md,
+    lineHeight: 18,
   },
   ratingPriceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -241,14 +280,43 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: 12,
   },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
   price: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
   },
-  availability: {
-    fontSize: 13,
-    fontWeight: '500',
+  priceUnit: {
+    color: Colors.textTertiary,
+    fontSize: 12,
+    marginLeft: 2,
+  },
+  availabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  availabilityBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+  },
+  onlineBadge: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: Colors.successSubtle,
+  },
+  offlineBadge: {
+    backgroundColor: 'rgba(107, 115, 142, 0.15)',
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+  },
+  availabilityText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   onlineText: {
     color: Colors.success,
@@ -256,8 +324,12 @@ const styles = StyleSheet.create({
   offlineText: {
     color: Colors.textTertiary,
   },
+  responseTime: {
+    color: Colors.textTertiary,
+    fontSize: 12,
+  },
   ctaContainer: {
-    marginTop: 1, // slight separation
+    marginTop: 1,
   },
   ctaButton: {
     height: 52,
