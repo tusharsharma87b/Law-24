@@ -3,9 +3,9 @@
 
 export const Colors = {
   // ── Backgrounds ──────────────────────────────
-  bgPrimary:   '#0B0F1A',
-  bgSecondary: '#121826',
-  bgTertiary:  '#161D2E',
+  bgPrimary:   '#050816',
+  bgSecondary: '#0F172A',
+  bgTertiary:  '#1E293B',
   bgElevated:  '#1A2236',
   bgOverlay:   'rgba(0,0,0,0.75)',
 
@@ -14,10 +14,10 @@ export const Colors = {
   glassMedium: 'rgba(255,255,255,0.08)',
   glassDark:   'rgba(0,0,0,0.12)',
 
-  // ── Primary CTA (Premium Blue) ───────────────
-  primary:        '#4F7CFF',
-  primaryDark:    '#3E6AEE',
-  primarySubtle:  'rgba(79,124,255,0.12)',
+  // ── Primary CTA (Premium Purple) ───────────────
+  primary:        '#5B5FFB',
+  primaryDark:    '#4A4EEA',
+  primarySubtle:  'rgba(91,95,251,0.12)',
 
   // ── Secondary (Premium Purple) ───────────────
   secondary:      '#7A5CFF',
@@ -25,30 +25,32 @@ export const Colors = {
   secondarySubtle:'rgba(122,92,255,0.12)',
 
   // ── Gold Accents (Ratings, Premium) ──────────
-  gold:        '#F5A623',
+  gold:        '#FBBF24',
   goldDim:     '#C9A84C',
-  goldSubtle:  'rgba(245,166,35,0.12)',
+  goldSubtle:  'rgba(251,191,36,0.12)',
 
   // ── Text ──────────────────────────────────────
   textPrimary:   '#FFFFFF',
-  textSecondary: '#9CA3AF',
-  textTertiary:  '#6B738E',
+  textSecondary: '#94A3B8',
+  textTertiary:  '#64748B',
   textInverse:   '#0D1117',
 
   // ── Semantic ──────────────────────────────────
   success:        '#22C55E',
   successSubtle:  'rgba(34,197,94,0.12)',
-  warning:        '#F59E0B',
-  warningSubtle:  'rgba(245,158,11,0.12)',
+  warning:        '#FBBF24',
+  warningSubtle:  'rgba(251,191,36,0.12)',
   danger:         '#F85149',
   dangerSubtle:   'rgba(248,81,73,0.12)',
   info:           '#58A6FF',
+  blue:           '#58A6FF',
+  blueSubtle:     'rgba(88,166,255,0.12)',
 
   // ── Borders ───────────────────────────────────
-  border:        '#1F2937',
-  borderSubtle:  '#1F2937',
-  borderActive:  '#4F7CFF',
-  borderGold:    '#F5A623',
+  border:        'rgba(255,255,255,0.06)',
+  borderSubtle:  'rgba(255,255,255,0.03)',
+  borderActive:  '#5B5FFB',
+  borderGold:    '#FBBF24',
 } as const;
 
 export type ColorKey = keyof typeof Colors;

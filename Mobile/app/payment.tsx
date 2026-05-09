@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Alert,
+  TextInput, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
@@ -9,7 +9,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
 import { MOCK_LAWYERS } from '../constants/mockData';
 import { useWalletStore } from '../store/useWalletStore';
-import { Avatar } from '../components/ui/Avatar';
 
 const UPI_APPS = [
   { id: 'gpay', label: 'GPay', color: '#4285F4', icon: 'google' as const },
@@ -76,7 +75,9 @@ export default function PaymentScreen() {
         <View style={s.orderCard}>
           <Text style={s.sectionTitle}>Order Summary</Text>
           <View style={s.lawyerRow}>
-            <Avatar name={lawyer.name} size={44} initials={lawyer.initials} color={lawyer.avatarColor} verified />
+            <View style={{ width: 44, height: 44, borderRadius: 22, overflow: "hidden", backgroundColor: lawyer.avatarColor, justifyContent: "center", alignItems: "center" }}>
+              <Text style={{ color: "#fff", fontWeight: "600" }}>{lawyer.initials}</Text>
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={s.lawyerName}>{lawyer.name}</Text>
               <Text style={s.consultType}>{isChat ? `Chat Consultation · ₹${lawyer.fees.chatPerMinuteInr}/min` : '30-min Video Call'}</Text>

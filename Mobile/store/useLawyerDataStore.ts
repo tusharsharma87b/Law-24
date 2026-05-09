@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { DIRECTORY_LAWYERS, type DirectoryLawyer } from '../constants/lawyersDirectory';
-import { MOCK_LAWYERS, type Lawyer } from '../constants/mockData';
 import { apiGet } from '../src/services/api';
+import type { Lawyer } from '../constants/mockData';
+import type { DirectoryLawyer } from '../constants/lawyersDirectory';
 
 type LawyerDataState = {
   directoryLawyers: DirectoryLawyer[] | null;
@@ -24,11 +24,14 @@ export const useLawyerDataStore = create<LawyerDataState>((set, get) => ({
     if (state.hydrated || state.isHydrating) return;
     set({ isHydrating: true });
     try {
-      let featuredLawyers: Lawyer[] = MOCK_LAWYERS;
-      let directoryLawyers: DirectoryLawyer[] = DIRECTORY_LAWYERS;
+      let featuredLawyers: Lawyer[] = [];
+      let directoryLawyers: DirectoryLawyer[] = [];
+      
       try {
         const rows = await apiGet('/lawyers');
+        console.log('[LawyerStore] API response rows count:', (rows as any)?.length || 0);
         if (Array.isArray(rows) && rows.length > 0) {
+          console.log('[LawyerStore] First lawyer sample:', rows[0]);
           featuredLawyers = rows.map((r: any, idx: number) => ({
             id: String(r.id),
             name: String(r.name ?? 'Advocate'),
@@ -86,8 +89,15 @@ export const useLawyerDataStore = create<LawyerDataState>((set, get) => ({
             queue: 0,
             lastSeen: l.isOnline ? null : 'Recently',
           }));
+          console.log('[LawyerStore] Mapped', featuredLawyers.length, 'lawyers');
+        } else {
+          console.warn('[LawyerStore] No lawyers returned from API');
         }
-      } catch {}
+      } catch (error) {
+        console.error('[LawyerStore] Failed to fetch lawyers from API:', error);
+        // No fallback to mock data - keep empty arrays
+      }
+      
       const byId = Object.fromEntries(featuredLawyers.map((l) => [l.id, l]));
       set({
         directoryLawyers,
@@ -102,9 +112,8 @@ export const useLawyerDataStore = create<LawyerDataState>((set, get) => ({
   preloadLawyerData: (id: string) => {
     const state = get();
     if (state.byId[id]) return;
-    const match = MOCK_LAWYERS.find((l) => l.id === id);
-    if (!match) return;
-    set((prev) => ({ byId: { ...prev.byId, [id]: match } }));
+    // No mock data fallback - lawyer will be loaded when hydrateLawyerData runs
+    // or when profile screen fetches from API directly
   },
 }));
 

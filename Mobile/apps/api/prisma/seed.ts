@@ -163,10 +163,10 @@ async function main() {
     },
   });
 
-  // 4) LAWYERS (2 realistic lawyers)
-  await prisma.lawyer.upsert({
-    where: { id: lawyer1Id },
-    update: {
+  // 4) LAWYERS (12 realistic lawyers)
+  const lawyers = [
+    {
+      id: lawyer1Id,
       name: 'Adv. Anjali Kapoor',
       specialization: 'Property Law',
       experience: 9,
@@ -177,23 +177,8 @@ async function main() {
       city: 'Bangalore',
       state: 'Karnataka',
     },
-    create: {
-      id: lawyer1Id,
-      name: 'Adv. Anjali Kapoor',
-      specialization: 'Property Law',
-      experience: 9,
-      rating: 4.9,
-      pricePerMin: 25,
-      languages: ['Hindi', 'English'],
-      availability: false,
-      city: 'Bangalore',
-      state: 'Karnataka',
-    },
-  });
-
-  await prisma.lawyer.upsert({
-    where: { id: lawyer2Id },
-    update: {
+    {
+      id: lawyer2Id,
       name: 'Adv. Arjun Reddy',
       specialization: 'Criminal Law',
       experience: 7,
@@ -204,19 +189,135 @@ async function main() {
       city: 'Mumbai',
       state: 'Maharashtra',
     },
-    create: {
-      id: lawyer2Id,
-      name: 'Adv. Arjun Reddy',
-      specialization: 'Criminal Law',
-      experience: 7,
+    {
+      id: '3d4e5f6a-7b8c-4d1e-9f0a-1b2c3d4e5f6a',
+      name: 'Adv. Priya Sharma',
+      specialization: 'Family Law',
+      experience: 11,
+      rating: 4.8,
+      pricePerMin: 35,
+      languages: ['Hindi', 'English', 'Marathi'],
+      availability: true,
+      city: 'Pune',
+      state: 'Maharashtra',
+    },
+    {
+      id: '4e5f6a7b-8c9d-5e2f-0a1b-2c3d4e5f6a7b',
+      name: 'Adv. Rajesh Kumar',
+      specialization: 'Corporate Law',
+      experience: 15,
+      rating: 4.9,
+      pricePerMin: 50,
+      languages: ['English', 'Hindi', 'Tamil'],
+      availability: true,
+      city: 'Chennai',
+      state: 'Tamil Nadu',
+    },
+    {
+      id: '5f6a7b8c-9d0e-6f3a-1b2c-3d4e5f6a7b8c',
+      name: 'Adv. Meera Singh',
+      specialization: 'Employment Law',
+      experience: 8,
+      rating: 4.6,
+      pricePerMin: 28,
+      languages: ['Hindi', 'English', 'Bengali'],
+      availability: true,
+      city: 'Kolkata',
+      state: 'West Bengal',
+    },
+    {
+      id: '6a7b8c9d-0e1f-7a4b-2c3d-4e5f6a7b8c9d',
+      name: 'Adv. Vikram Patel',
+      specialization: 'Cyber Crime',
+      experience: 6,
+      rating: 4.5,
+      pricePerMin: 40,
+      languages: ['English', 'Gujarati', 'Hindi'],
+      availability: true,
+      city: 'Ahmedabad',
+      state: 'Gujarat',
+    },
+    {
+      id: '7b8c9d0e-1f2a-8b5c-3d4e-5f6a7b8c9d0e',
+      name: 'Adv. Sanjay Verma',
+      specialization: 'Divorce Law',
+      experience: 12,
       rating: 4.7,
-      pricePerMin: 30,
-      languages: ['English'],
+      pricePerMin: 32,
+      languages: ['Hindi', 'English'],
+      availability: false,
+      city: 'Delhi',
+      state: 'Delhi',
+    },
+    {
+      id: '8c9d0e1f-2a3b-9c6d-4e5f-6a7b8c9d0e1f',
+      name: 'Adv. Neha Gupta',
+      specialization: 'Startup Law',
+      experience: 5,
+      rating: 4.4,
+      pricePerMin: 45,
+      languages: ['English', 'Hindi'],
+      availability: true,
+      city: 'Hyderabad',
+      state: 'Telangana',
+    },
+    {
+      id: '9d0e1f2a-3b4c-0d7e-5f6a-7b8c9d0e1f2a',
+      name: 'Adv. Amit Desai',
+      specialization: 'Tax Law',
+      experience: 14,
+      rating: 4.8,
+      pricePerMin: 55,
+      languages: ['English', 'Marathi', 'Hindi'],
       availability: true,
       city: 'Mumbai',
       state: 'Maharashtra',
     },
-  });
+    {
+      id: '0e1f2a3b-4c5d-1e8f-6a7b-8c9d0e1f2a3b',
+      name: 'Adv. Kavita Reddy',
+      specialization: 'Consumer Law',
+      experience: 9,
+      rating: 4.6,
+      pricePerMin: 30,
+      languages: ['Telugu', 'English', 'Hindi'],
+      availability: false,
+      city: 'Vijayawada',
+      state: 'Andhra Pradesh',
+    },
+    {
+      id: '1f2a3b4c-5d6e-2f9a-7b8c-9d0e1f2a3b4c',
+      name: 'Adv. Rohit Malhotra',
+      specialization: 'Civil Law',
+      experience: 10,
+      rating: 4.7,
+      pricePerMin: 35,
+      languages: ['Hindi', 'English', 'Punjabi'],
+      availability: true,
+      city: 'Chandigarh',
+      state: 'Punjab',
+    },
+    {
+      id: '2a3b4c5d-6e7f-3a0b-8c9d-0e1f2a3b4c5d',
+      name: 'Adv. Sonali Joshi',
+      specialization: 'Intellectual Property',
+      experience: 8,
+      rating: 4.5,
+      pricePerMin: 48,
+      languages: ['English', 'Hindi', 'Marathi'],
+      availability: true,
+      city: 'Nagpur',
+      state: 'Maharashtra',
+    },
+  ];
+
+  for (const lawyer of lawyers) {
+    await prisma.lawyer.upsert({
+      where: { id: lawyer.id },
+      update: lawyer,
+      create: lawyer,
+    });
+  }
 
   // Folders (used by documents relation)
   await prisma.folder.upsert({
@@ -366,7 +467,7 @@ async function main() {
   console.log('Seed complete:', {
     userId: user.id,
     caseIds: [case1.id, case2.id, case3.id],
-    lawyerIds: [lawyer1Id, lawyer2Id],
+    lawyerIds: lawyers.map(l => l.id),
     documentIds: docs.map((d) => d.id),
   });
 }

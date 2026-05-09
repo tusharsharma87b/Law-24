@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Avatar } from '../ui/Avatar';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Colors } from '../../constants/colors';
 import type { DiscoveryLawyer } from '../../constants/lawyerDiscovery';
 import { AppIcon } from '../ui/AppIcon';
@@ -14,14 +13,9 @@ export const LawyerDiscoveryListCard = React.memo(function LawyerDiscoveryListCa
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
       <View style={styles.topRow}>
-        <Avatar
-          name={item.name}
-          size={52}
-          initials={item.initials}
-          color={item.avatarColor}
-          online={item.online}
-          verified={item.verified}
-        />
+        <View style={{ width: 52, height: 52, borderRadius: 26, overflow: "hidden", backgroundColor: item.avatarColor, justifyContent: "center", alignItems: "center" }}>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>{item.initials}</Text>
+        </View>
         <View style={styles.topMeta}>
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>

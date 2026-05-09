@@ -15,7 +15,7 @@ const MOBILE_MAX_WIDTH = 430;
 
 
 const StackScreens = () => (
-  <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0D1117' } }}>
+  <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#050816' } }}>
     <Stack.Screen name="index" />
     <Stack.Screen name="(auth)" />
     <Stack.Screen name="(tabs)" />
@@ -67,7 +67,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <AuthUnauthorizedSync />
-          <StatusBar style="light" backgroundColor="#0D1117" />
+          <StatusBar style="light" backgroundColor="#050816" />
           <StackScreens />
           {/* Global floating AI button — mounted OUTSIDE Stack so it overlays all screens */}
           {showFAB && <FloatingAIButton />}
@@ -77,10 +77,10 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#050A14' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#050816' }}>
       <SafeAreaProvider>
         <AuthUnauthorizedSync />
-        <StatusBar style="light" backgroundColor="#0D1117" />
+        <StatusBar style="light" backgroundColor="#050816" />
         <View style={styles.webOuter}>
           <View style={styles.webPhone}>
             <StackScreens />
@@ -98,13 +98,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    backgroundColor: '#050A14',
+    backgroundColor: '#050816',
   },
   webPhone: {
     flex: 1,
     width: '100%',
     maxWidth: MOBILE_MAX_WIDTH,
-    backgroundColor: '#0D1117',
+    backgroundColor: '#050816',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 0 },
