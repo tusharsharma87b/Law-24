@@ -1,35 +1,28 @@
 /**
  * Root entry-point — handles INITIAL auth routing only.
  *
- * THE BUG THIS FIXES:
- * Both `app/index.tsx` AND `app/(tabs)/index.tsx` map to URL `/` in Expo Router
- * (because (tabs) is a route GROUP — it adds no URL prefix).
- * When the user clicks the Home tab while in the app, the URL changes to `/`,
- * Expo Router re-evaluates this file, sees isLoggedIn=false (no persist), and
- * redirects to login.
+ * HYDRATION FIX:
+ * We gate on `isHydrated` (set by `hydrate()` in _layout.tsx) so we NEVER
+ * fire a <Redirect> before AsyncStorage has been read.
  *
- * THE FIX:
- * Use useSegments() to check the navigation STATE (not just the URL).
- * If segments[0] === '(tabs)', the user is already inside the tabs navigator —
- * render null so the tabs handle themselves. Only redirect on the very first
- * load when no navigation has happened yet.
+ * Before this fix: restoringSession started as false → immediate redirect to
+ * login before the token was loaded → login bounce-back loop.
  */
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Redirect } from 'expo-router';
 import { useAuthStore } from '../store/useAuthStore';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 
 export default function Index() {
-  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
-  const [ready, setReady] = useState(false);
-  useEffect(() => { setReady(true); }, []);
+  const user         = useAuthStore((s) => s.user);
+  const isHydrated   = useAuthStore((s) => s.isHydrated);
 
-  // Still initialising — show spinner so navigator is fully mounted before
-  // <Redirect> fires (prevents "navigate before mounting" error).
-  if (!ready) {
+  // Wait for AsyncStorage read to complete.
+  if (!isHydrated) {
     return <LoadingScreen message="Preparing app..." />;
   }
 
-  // First load — send user to the right place
-  return <Redirect href={(isLoggedIn ? '/(tabs)' : '/(auth)/login') as any} />;
+  // index.tsx is just a shell; the actual routing logic is now in app/_layout.tsx 
+  // via segments and auth-store state checks.
+  return null;
 }

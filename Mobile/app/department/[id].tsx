@@ -1,7 +1,7 @@
 /**
- * Department Screen — shows subcategories (as layman problem cards),
+ * Department Screen � shows subcategories (as layman problem cards),
  * recommended lawyers, and quick-start actions.
- * Accessed via: Home → tap a department card → this screen
+ * Accessed via: Home ? tap a department card ? this screen
  */
 import React, { useState, useMemo } from 'react';
 import {
@@ -89,7 +89,7 @@ export default function DepartmentScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
 
-        {/* ── Department hero ── */}
+        {/* -- Department hero -- */}
         <LinearGradient
           colors={[dept.color + '22', dept.color + '06']}
           style={[s.heroCard, { borderColor: dept.color + '40' }]}
@@ -103,7 +103,7 @@ export default function DepartmentScreen() {
           </View>
         </LinearGradient>
 
-        {/* ── Quick actions ── */}
+        {/* -- Quick actions -- */}
         <View style={s.quickRow}>
           <TouchableOpacity style={s.quickBtn} onPress={() => handleTalkToLawyer()} activeOpacity={0.85}>
             <MaterialIcons name="people" size={16} color="#fff" />
@@ -115,9 +115,9 @@ export default function DepartmentScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Subcategories (Problems) ── */}
+        {/* -- Subcategories (Problems) -- */}
         <Text style={s.sectionLabel}>WHAT IS YOUR PROBLEM?</Text>
-        <Text style={s.sectionSub}>Tap to see options — use plain language, no legal knowledge needed</Text>
+        <Text style={s.sectionSub}>Tap to see options � use plain language, no legal knowledge needed</Text>
 
         {dept.subcategories.map((sub) => {
           const urg = URGENCY_CFG[sub.urgency] ?? URGENCY_CFG.medium;
@@ -138,7 +138,7 @@ export default function DepartmentScreen() {
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={s.subProblem}>{sub.problem}</Text>
                   <Text style={s.subLegal} numberOfLines={1}>{sub.legalTitle}</Text>
-                  <Text style={s.subTimeline}>⏱ Typical: {sub.timeline}</Text>
+                  <Text style={s.subTimeline}>? Typical: {sub.timeline}</Text>
                 </View>
 
                 {/* Right: urgency badge */}
@@ -196,13 +196,13 @@ export default function DepartmentScreen() {
           );
         })}
 
-        {/* ── Recommended lawyers ── */}
+        {/* -- Recommended lawyers -- */}
         {matchedLawyers.length > 0 && (
           <View style={s.lawyersSection}>
             <View style={s.lawyersSectionHeader}>
               <Text style={s.sectionLabel}>RECOMMENDED LAWYERS</Text>
               <TouchableOpacity onPress={() => handleTalkToLawyer()} activeOpacity={0.8}>
-                <Text style={s.seeAllTxt}>See all →</Text>
+                <Text style={s.seeAllTxt}>See all ?</Text>
               </TouchableOpacity>
             </View>
             <Text style={s.sectionSub}>Verified lawyers specialising in {dept.name}</Text>
@@ -210,7 +210,7 @@ export default function DepartmentScreen() {
               <TouchableOpacity
                 key={l.id}
                 style={s.lawyerCard}
-                onPress={() => router.push({ pathname: '/lawyer/[id]', params: { id: l.profileId } })}
+                onPress={() => router.push({ pathname: '/lawyer/[id]', params: { id: l.profileId } } as any)}
                 activeOpacity={0.86}
               >
                 <LinearGradient colors={['#4F46E5', '#7C3AED']} style={s.lawyerAvatar}>
@@ -228,7 +228,7 @@ export default function DepartmentScreen() {
                     <View style={s.metaDot} />
                     <Text style={s.lawyerExp}>{l.experience} yrs</Text>
                     <View style={s.metaDot} />
-                    <Text style={s.lawyerPrice}>₹{l.pricePerMin}/min</Text>
+                    <Text style={s.lawyerPrice}>?{l.pricePerMin}/min</Text>
                   </View>
                 </View>
                 <View style={[s.onlineTag, { backgroundColor: l.online ? Colors.successSubtle : Colors.bgElevated }]}>
@@ -242,7 +242,7 @@ export default function DepartmentScreen() {
           </View>
         )}
 
-        {/* ── Other departments quick nav ── */}
+        {/* -- Other departments quick nav -- */}
         <Text style={[s.sectionLabel, { marginTop: 10 }]}>OTHER DEPARTMENTS</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.deptRow}>
           {LEGAL_DEPARTMENTS.filter((d) => d.id !== dept.id).map((d) => (

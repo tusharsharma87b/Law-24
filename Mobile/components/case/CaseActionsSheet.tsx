@@ -13,7 +13,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Animated, PanResponder, Alert, TextInput, Platform,
+  Animated, PanResponder, Alert, TextInput,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -177,7 +177,7 @@ function LawyerPanel({
   const oldRate = Number(active?.lawyer?.rate ?? active?.lawyer?.price ?? 0);
   const activeTicket = (active?.tickets ?? []).find((t: any) => t.type === 'lawyer_review' && (t.status === 'OPEN' || t.status === 'RESOLVED'));
   const selectedLawyer = !useOwn ? recommended.find((l) => l.id === selectedId) : null;
-  const newRate = useOwn ? oldRate : Number(selectedLawyer?.price ?? selectedLawyer?.rate ?? 0);
+  const newRate = useOwn ? oldRate : Number(selectedLawyer?.price ?? (selectedLawyer as any)?.rate ?? 0);
   const difference = Math.max(0, newRate - oldRate);
   const replacementRecommended = activeTicket?.status === 'RESOLVED' && activeTicket?.resolution === 'Replacement recommended';
   const firstFreeAvailable = !active?.freeReplacementUsed;
@@ -455,18 +455,18 @@ export function CaseActionsSheet({ visible, onClose, caseId, caseTitle, onEditCa
       slideAnim.setValue(800);
       backdropAnim.setValue(0);
       Animated.parallel([
-        Animated.spring(slideAnim,    { toValue: 0, useNativeDriver: true, speed: 22, bounciness: 0 }),
-        Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.spring(slideAnim,    { toValue: 0, useNativeDriver: false, speed: 22, bounciness: 0 }),
+        Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
       ]).start();
     } else {
       if (isClosing.current) return;
       isClosing.current = true;
       Animated.parallel([
-        Animated.timing(slideAnim,    { toValue: 800, duration: 220, useNativeDriver: true }),
-        Animated.timing(backdropAnim, { toValue: 0,   duration: 200, useNativeDriver: true }),
+        Animated.timing(slideAnim,    { toValue: 800, duration: 220, useNativeDriver: false }),
+        Animated.timing(backdropAnim, { toValue: 0,   duration: 200, useNativeDriver: false }),
       ]).start(({ finished }) => { if (finished) { setMounted(false); } });
     }
-  }, [visible]);
+  }, [visible, backdropAnim, dragY, slideAnim]);
 
   const panResponder = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, { dy, dx }) => dy > 6 && Math.abs(dy) > Math.abs(dx),
@@ -478,7 +478,7 @@ export function CaseActionsSheet({ visible, onClose, caseId, caseTitle, onEditCa
       if (finalDy > DISMISS_THRESHOLD || vy > 0.5) {
         onClose();
       } else {
-        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: false, speed: 20, bounciness: 6 }).start();
       }
     },
   })).current;

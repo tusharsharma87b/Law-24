@@ -1,16 +1,16 @@
 /**
- * Case OS — redesigned for layman users.
+ * Case OS � redesigned for layman users.
  *
  * Design principles:
- *  • One screen = one case in focus
- *  • Show "what to do next" — not just status
- *  • Plain English everywhere, no legal jargon
- *  • Every section has a clear action button
+ *  � One screen = one case in focus
+ *  � Show "what to do next" � not just status
+ *  � Plain English everywhere, no legal jargon
+ *  � Every section has a clear action button
  */
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, FlatList, TextInput,
-  Platform, Alert, Linking,
+  Alert, Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { CaseActionsSheet } from '../../components/case/CaseActionsSheet';
@@ -27,7 +27,7 @@ import { useChatStore } from '../../store/useChatStore';
 
 type AnyCase = typeof MOCK_CASES[0] & Record<string, any>;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 
 /** Human-readable name for each case (shown in the selector tab) */
 function getFriendlyName(c: AnyCase): string {
@@ -39,10 +39,10 @@ function getFriendlyName(c: AnyCase): string {
   if (t.includes('wrongful') || t.includes('terminat')) return 'Job\nTermination';
   if (t.includes('divorce'))                            return 'Divorce';
   if (t.includes('custody'))                            return 'Child\nCustody';
-  return (c.chips[0] ?? c.title.split('—')[0].trim()).slice(0, 14);
+  return (c.chips[0] ?? c.title.split('�')[0].trim()).slice(0, 14);
 }
 
-/** Friendly category header — "Matrimonial Cases" not "matrimonial" */
+/** Friendly category header � "Matrimonial Cases" not "matrimonial" */
 function getCategoryLabel(cat: string): string {
   const map: Record<string, string> = {
     matrimonial: 'Matrimonial Cases',
@@ -59,7 +59,7 @@ function getCategoryLabel(cat: string): string {
   return map[cat] ?? 'My Cases';
 }
 
-/** Days until next hearing — plain language */
+/** Days until next hearing � plain language */
 function getDaysUntil(dateStr: string | undefined): string {
   if (!dateStr) return '';
   const months: Record<string, number> = {
@@ -73,12 +73,12 @@ function getDaysUntil(dateStr: string | undefined): string {
   if (diff < 0)  return 'Passed';
   if (diff === 0) return 'Today!';
   if (diff === 1) return 'Tomorrow!';
-  if (diff <= 7)  return `In ${diff} days ⚡`;
+  if (diff <= 7)  return `In ${diff} days ?`;
   if (diff <= 30) return `In ${diff} days`;
   return `In ~${Math.round(diff / 30)} months`;
 }
 
-/** Urgency label → colour */
+/** Urgency label ? colour */
 const URG: Record<string, { color: string; bg: string }> = {
   critical: { color: Colors.danger,  bg: Colors.dangerSubtle },
   high:     { color: Colors.warning, bg: Colors.warningSubtle },
@@ -86,7 +86,7 @@ const URG: Record<string, { color: string; bg: string }> = {
   low:      { color: Colors.success, bg: Colors.successSubtle },
 };
 
-/** Priority → colour */
+/** Priority ? colour */
 const PRI = URG;
 
 /** Dot colour for timeline types */
@@ -104,7 +104,7 @@ const DOT: Record<string, string> = {
   support: Colors.warning,
 };
 
-// ─── Case Selector Bar ────────────────────────────────────────────────────────
+// --- Case Selector Bar --------------------------------------------------------
 function CaseSelector({
   allCases,
   activeId,
@@ -156,7 +156,7 @@ function CaseSelector({
   );
 }
 
-// ─── "What To Do" Tab ────────────────────────────────────────────────────────
+// --- "What To Do" Tab --------------------------------------------------------
 function WhatToDoTab({
   c,
   onGoToDocs,
@@ -175,7 +175,7 @@ function WhatToDoTab({
   return (
     <View style={td.root}>
 
-      {/* ── "Your Next Step" hero card ── */}
+      {/* -- "Your Next Step" hero card -- */}
       {(c.nextAction || dynamicNextStep) && (
         <LinearGradient
           colors={[u.color + '22', u.color + '08']}
@@ -197,7 +197,7 @@ function WhatToDoTab({
         </LinearGradient>
       )}
 
-      {/* ── Next Hearing countdown ── */}
+      {/* -- Next Hearing countdown -- */}
       {c.nextHearing && (
         <View style={td.hearingCard}>
           <View style={td.hearingLeft}>
@@ -205,7 +205,7 @@ function WhatToDoTab({
             <View>
               <Text style={td.hearingLabel}>Next Court Hearing</Text>
               <Text style={td.hearingDate}>{c.nextHearing}</Text>
-              {days ? <Text style={[td.hearingCountdown, days.includes('⚡') && { color: Colors.warning }]}>{days}</Text> : null}
+              {days ? <Text style={[td.hearingCountdown, days.includes('?') && { color: Colors.warning }]}>{days}</Text> : null}
             </View>
           </View>
           <TouchableOpacity style={td.remindBtn} activeOpacity={0.8} onPress={onRemind}>
@@ -215,13 +215,13 @@ function WhatToDoTab({
         </View>
       )}
 
-      {/* ── Simple status grid ── */}
+      {/* -- Simple status grid -- */}
       <View style={td.statusGrid}>
         {[
           { icon: 'emoji-events', color: Colors.gold, top: `${c.successProbability}%`, bot: 'Winning Chance' },
           { icon: 'timeline',     color: Colors.primary, top: c.stage ?? 'Filing', bot: 'Current Stage' },
           { icon: 'folder',       color: Colors.success, top: c.caseNumber ?? 'Pending', bot: 'Case Number' },
-          { icon: 'update',       color: Colors.blue, top: c.nextHearing ?? '—', bot: 'Next Hearing' },
+          { icon: 'update',       color: Colors.blue, top: c.nextHearing ?? '�', bot: 'Next Hearing' },
         ].map((st) => (
           <View key={st.bot} style={td.statusCard}>
             <View style={[td.statusIcon, { backgroundColor: st.color + '1A' }]}>
@@ -233,7 +233,7 @@ function WhatToDoTab({
         ))}
       </View>
 
-      {/* ── Pending actions — plain language ── */}
+      {/* -- Pending actions � plain language -- */}
       {c.pendingActions?.length > 0 && (
         <View style={td.section}>
           <Text style={td.sectionTitle}>Things You Must Do</Text>
@@ -258,7 +258,7 @@ function WhatToDoTab({
         </View>
       )}
 
-      {/* ── AI guidance — plain language ── */}
+      {/* -- AI guidance � plain language -- */}
       {c.aiStrategy && (
         <View style={td.aiCard}>
           <View style={td.aiHeader}>
@@ -283,7 +283,7 @@ function WhatToDoTab({
         </View>
       )}
 
-      {/* ── Similar outcomes ── */}
+      {/* -- Similar outcomes -- */}
       {c.similarCases?.length > 0 && (
         <View style={td.section}>
           <Text style={td.sectionTitle}>Cases Like Yours</Text>
@@ -303,7 +303,7 @@ function WhatToDoTab({
         </View>
       )}
 
-      {/* ── Quick action buttons ── */}
+      {/* -- Quick action buttons -- */}
       <View style={td.quickGrid}>
         {[
           { icon: 'upload-file', label: 'Upload Docs',  color: Colors.primary, action: onGoToDocs },
@@ -319,7 +319,7 @@ function WhatToDoTab({
   );
 }
 
-// ─── Events / Timeline Tab ────────────────────────────────────────────────────
+// --- Events / Timeline Tab ----------------------------------------------------
 function EventsTab({ c }: { c: AnyCase }) {
   const events = ([...(c.events ?? [])] as any[]).sort((a, b) => {
     const ta = new Date(a.date || 0).getTime();
@@ -370,7 +370,7 @@ function EventsTab({ c }: { c: AnyCase }) {
   );
 }
 
-// ─── Evidence & Documents Tab ─────────────────────────────────────────────────
+// --- Evidence & Documents Tab -------------------------------------------------
 const DOC_TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
   document: { label: 'Documents', icon: 'description', color: Colors.primary },
   audio: { label: 'Audio', icon: 'graphic-eq', color: Colors.gold },
@@ -386,14 +386,57 @@ const FILE_TYPES = {
   CHAT: 'chat',
   OFFICIAL: 'official',
 } as const;
+const EVIDENCE_FOLDERS = [
+  'Case Documents',
+  'Evidence Files',
+  'Court Submissions',
+  'Personal Uploads',
+  'Lawyer Shared',
+] as const;
+type EvidenceFolder = (typeof EVIDENCE_FOLDERS)[number];
 const EVIDENCE_TAG_SUGGESTIONS = ['Identity Proof', 'Financial Evidence', 'Abuse Evidence', 'Communication Proof'];
-const UPLOAD_OPTIONS: Array<{ id: 'document' | 'video' | 'audio' | 'chat' | 'official'; label: string; icon: string }> = [
+const UPLOAD_OPTIONS: { id: 'document' | 'video' | 'audio' | 'chat' | 'official'; label: string; icon: string }[] = [
   { id: 'document', label: 'Upload Document', icon: 'description' },
   { id: 'video', label: 'Upload Video Evidence', icon: 'videocam' },
   { id: 'audio', label: 'Upload Audio Recording', icon: 'graphic-eq' },
   { id: 'chat', label: 'Upload Chat / Screenshot', icon: 'chat' },
   { id: 'official', label: 'Upload Official Record', icon: 'account-balance' },
 ];
+
+const FOLDER_ICON: Record<EvidenceFolder, string> = {
+  'Case Documents': 'folder',
+  'Evidence Files': 'video-library',
+  'Court Submissions': 'gavel',
+  'Personal Uploads': 'person',
+  'Lawyer Shared': 'group',
+};
+
+const FOLDER_COLOR: Record<EvidenceFolder, string> = {
+  'Case Documents': Colors.primary,
+  'Evidence Files': Colors.gold,
+  'Court Submissions': Colors.warning,
+  'Personal Uploads': Colors.success,
+  'Lawyer Shared': Colors.blue,
+};
+
+function inferFolderFromDoc(doc: any): EvidenceFolder {
+  if (doc.folder && EVIDENCE_FOLDERS.includes(doc.folder)) return doc.folder as EvidenceFolder;
+  if (doc.uploadedBy === 'lawyer') return 'Lawyer Shared';
+  if (doc.courtReady || doc.type === 'official') return 'Court Submissions';
+  if (doc.type === 'video' || doc.type === 'audio' || doc.type === 'chat') return 'Evidence Files';
+  if (doc.type === 'document') return 'Case Documents';
+  return 'Personal Uploads';
+}
+
+function formatFileSize(size: unknown): string {
+  const bytes = typeof size === 'number' && Number.isFinite(size) ? size : Number(size);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '�';
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+}
 
 function DocsTab({
   c,
@@ -403,19 +446,22 @@ function DocsTab({
   onToggleCourtReady,
 }: {
   c: AnyCase;
-  onUpload: (kind: 'document' | 'video' | 'audio' | 'chat' | 'official') => void;
+  onUpload: (kind: 'document' | 'video' | 'audio' | 'chat' | 'official', folder: EvidenceFolder) => void;
   onView: (doc: any) => void;
   onDelete: (docId: string) => void;
   onToggleCourtReady: (docId: string, value: boolean) => void;
 }) {
+  const currentRole: 'user' | 'lawyer' = 'user';
+  const [selectedFolder, setSelectedFolder] = useState<EvidenceFolder | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<'all'|'document'|'audio'|'video'|'chat'|'official'>('all');
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date'|'type'|'verified'>('date');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const docs = (c.documents ?? []) as any[];
+  const [uploadFolder, setUploadFolder] = useState<EvidenceFolder>('Evidence Files');
   const evidenceData = useMemo(
-    () =>
-      docs.map((item) => ({
+    () => {
+      const docs = (c.documents ?? []) as any[];
+      return docs.map((item) => ({
         ...item,
         type: String(item.type || item.fileType || '')
           .toLowerCase()
@@ -423,16 +469,29 @@ function DocsTab({
           .replace('videos', 'video')
           .replace('audios', 'audio')
           .replace('chats', 'chat'),
-      })),
-    [docs]
+        folder: inferFolderFromDoc(item),
+        uploadedBy: item.uploadedBy === 'lawyer' ? 'lawyer' : 'user',
+      }));
+    },
+    [c.documents]
   );
-  const [filteredData, setFilteredData] = useState<any[]>(evidenceData);
+  const [filteredData, setFilteredData] = useState<any[]>([]);
+
+  const folderCounts = useMemo(
+    () =>
+      EVIDENCE_FOLDERS.map((folder) => ({
+        folder,
+        count: evidenceData.filter((d) => d.folder === folder).length,
+      })),
+    [evidenceData]
+  );
 
   useEffect(() => {
     const q = query.trim().toLowerCase();
-    let rows = selectedFilter === 'all'
-      ? evidenceData
-      : evidenceData.filter((item) => item.type === selectedFilter);
+    let rows = selectedFolder ? evidenceData.filter((item) => item.folder === selectedFolder) : evidenceData;
+    rows = selectedFilter === 'all'
+      ? rows
+      : rows.filter((item) => item.type === selectedFilter);
     if (q) {
       rows = rows.filter((item) =>
         String(item.name || '').toLowerCase().includes(q) ||
@@ -445,10 +504,122 @@ function DocsTab({
       return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
     });
     setFilteredData(rows);
-  }, [selectedFilter, evidenceData, query, sortBy]);
+  }, [selectedFilter, selectedFolder, evidenceData, query, sortBy]);
+
+  const canDelete = (doc: any) => doc.uploadedBy === currentRole;
+  const canEdit = (doc: any) => doc.uploadedBy === currentRole;
+
+  if (!selectedFolder) {
+    return (
+      <View style={dc.root}>
+        <Text style={dc.sectionTitle}>Folders</Text>
+        <View style={dc.folderGrid}>
+          {folderCounts.map(({ folder, count }) => (
+            <TouchableOpacity
+              key={folder}
+              style={dc.folderCard}
+              activeOpacity={0.85}
+              onPress={() => {
+                setSelectedFolder(folder);
+                setUploadFolder(folder);
+              }}
+            >
+              <View style={[dc.folderIcon, { backgroundColor: FOLDER_COLOR[folder] + '22' }]}>
+                <MaterialIcons name={FOLDER_ICON[folder] as any} size={24} color={FOLDER_COLOR[folder]} />
+              </View>
+              <Text style={dc.folderName}>{folder}</Text>
+              <Text style={dc.folderCount}>{count} file{count === 1 ? '' : 's'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={dc.uploadRow}>
+          <TouchableOpacity
+            style={dc.uploadBtn}
+            activeOpacity={0.85}
+            onPress={() => {
+              setUploadFolder('Evidence Files');
+              setShowUploadModal(true);
+            }}
+          >
+            <MaterialIcons name="upload" size={16} color="#fff" />
+            <Text style={dc.uploadBtnTxt}>Add Evidence</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={dc.sectionTitle}>Recent Documents</Text>
+        <View style={dc.docList}>
+          {evidenceData.slice(0, 6).map((doc) => {
+            const meta = DOC_TYPE_META[doc.type] ?? DOC_TYPE_META.document;
+            return (
+              <View key={doc.id} style={dc.docRowMini}>
+                <View style={[dc.docIcon, { backgroundColor: meta.color + '1A' }]}>
+                  <MaterialIcons name={meta.icon as any} size={20} color={meta.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={dc.docName} numberOfLines={1}>{doc.name}</Text>
+                  <Text style={dc.docMeta}>
+                    {formatFileSize(doc.size)} � {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => onView(doc)} hitSlop={8}>
+                  <MaterialIcons name="open-in-new" size={16} color={Colors.primary} />
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+        {showUploadModal && (
+          <View style={dc.uploadModalLayer} pointerEvents="box-none">
+            <TouchableOpacity style={dc.uploadModalBackdrop} onPress={() => setShowUploadModal(false)} activeOpacity={1} />
+            <View style={dc.uploadModalSheet}>
+              <Text style={dc.uploadModalTitle}>Upload Evidence</Text>
+              <Text style={dc.modalSub}>Choose folder</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={dc.folderChipRow}>
+                {EVIDENCE_FOLDERS.map((fdr) => (
+                  <TouchableOpacity
+                    key={fdr}
+                    style={[dc.folderChip, uploadFolder === fdr && dc.folderChipActive]}
+                    onPress={() => setUploadFolder(fdr)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[dc.folderChipTxt, uploadFolder === fdr && dc.folderChipTxtActive]}>{fdr}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {UPLOAD_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={dc.uploadOption}
+                  onPress={() => {
+                    setShowUploadModal(false);
+                    onUpload(opt.id, uploadFolder);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <MaterialIcons name={opt.icon as any} size={18} color={Colors.primary} />
+                  <Text style={dc.uploadOptionTxt}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={dc.closeUploadBtn} onPress={() => setShowUploadModal(false)} activeOpacity={0.85}>
+                <Text style={dc.closeUploadTxt}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={dc.root}>
+      <View style={dc.folderHeader}>
+        <TouchableOpacity style={dc.backFolderBtn} onPress={() => setSelectedFolder(null)} activeOpacity={0.85}>
+          <MaterialIcons name="arrow-back" size={16} color={Colors.primary} />
+          <Text style={dc.backFolderTxt}>Folders</Text>
+        </TouchableOpacity>
+        <Text style={dc.folderHeaderTitle}>{selectedFolder}</Text>
+      </View>
       <TextInput
         style={dc.searchInput}
         placeholder="Search files or tags"
@@ -488,7 +659,14 @@ function DocsTab({
         extraData={selectedFilter}
         ListHeaderComponent={
           <View style={dc.uploadRow}>
-            <TouchableOpacity style={dc.uploadBtn} activeOpacity={0.85} onPress={() => setShowUploadModal(true)}>
+            <TouchableOpacity
+              style={dc.uploadBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                setUploadFolder(selectedFolder);
+                setShowUploadModal(true);
+              }}
+            >
               <MaterialIcons name="upload" size={16} color="#fff" />
               <Text style={dc.uploadBtnTxt}>Add Evidence</Text>
             </TouchableOpacity>
@@ -505,7 +683,7 @@ function DocsTab({
               <View style={{ flex: 1 }}>
                 <Text style={dc.docName} numberOfLines={1}>{doc.name}</Text>
                 <Text style={dc.docMeta}>
-                  {Math.max(1, Math.round((doc.size ?? 0) / 1024))} KB · {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')}
+                  {formatFileSize(doc.size)} � {new Date(doc.createdAt || Date.now()).toLocaleDateString('en-IN')} � Uploaded by {doc.uploadedBy === 'lawyer' ? 'Lawyer' : 'User'}
                 </Text>
                 <View style={dc.tagRow}>
                   {(doc.tags ?? []).slice(0, 3).map((t: string) => (
@@ -520,24 +698,37 @@ function DocsTab({
                     {doc.courtReady ? 'Court Ready' : 'Needs Action'}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={dc.toggleReadyBtn}
-                  onPress={() => onToggleCourtReady(doc.id, !doc.courtReady)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={dc.toggleReadyTxt}>{doc.courtReady ? 'Mark Needs Action' : 'Mark as Court Ready'}</Text>
-                </TouchableOpacity>
+                {canEdit(doc) ? (
+                  <TouchableOpacity
+                    style={dc.toggleReadyBtn}
+                    onPress={() => onToggleCourtReady(doc.id, !doc.courtReady)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={dc.toggleReadyTxt}>{doc.courtReady ? 'Mark Needs Action' : 'Mark as Court Ready'}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={dc.readOnlyPill}>
+                    <Text style={dc.readOnlyTxt}>Read-only (shared by lawyer)</Text>
+                  </View>
+                )}
               </View>
               <View style={dc.docActions}>
+                {canEdit(doc) ? (
+                  <TouchableOpacity hitSlop={8} onPress={() => onToggleCourtReady(doc.id, !doc.courtReady)}>
+                    <MaterialIcons name="edit" size={16} color={Colors.primary} />
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity hitSlop={8} onPress={() => onView(doc)}>
                   <MaterialIcons name="open-in-new" size={16} color={Colors.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity hitSlop={8} onPress={() => onView(doc)}>
                   <MaterialIcons name="download" size={17} color={Colors.textSecondary} />
                 </TouchableOpacity>
-                <TouchableOpacity hitSlop={8} onPress={() => onDelete(doc.id)}>
-                  <MaterialIcons name="delete-outline" size={17} color={Colors.danger} />
-                </TouchableOpacity>
+                {canDelete(doc) ? (
+                  <TouchableOpacity hitSlop={8} onPress={() => onDelete(doc.id)}>
+                    <MaterialIcons name="delete-outline" size={17} color={Colors.danger} />
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
           );
@@ -558,13 +749,26 @@ function DocsTab({
           <TouchableOpacity style={dc.uploadModalBackdrop} onPress={() => setShowUploadModal(false)} activeOpacity={1} />
           <View style={dc.uploadModalSheet}>
             <Text style={dc.uploadModalTitle}>Upload Evidence</Text>
+            <Text style={dc.modalSub}>Choose folder</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={dc.folderChipRow}>
+              {EVIDENCE_FOLDERS.map((fdr) => (
+                <TouchableOpacity
+                  key={fdr}
+                  style={[dc.folderChip, uploadFolder === fdr && dc.folderChipActive]}
+                  onPress={() => setUploadFolder(fdr)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[dc.folderChipTxt, uploadFolder === fdr && dc.folderChipTxtActive]}>{fdr}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
             {UPLOAD_OPTIONS.map((opt) => (
               <TouchableOpacity
                 key={opt.id}
                 style={dc.uploadOption}
                 onPress={() => {
                   setShowUploadModal(false);
-                  onUpload(opt.id);
+                  onUpload(opt.id, uploadFolder);
                 }}
                 activeOpacity={0.85}
               >
@@ -572,7 +776,7 @@ function DocsTab({
                 <Text style={dc.uploadOptionTxt}>{opt.label}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={dc.tagHint}>Suggested tags: {EVIDENCE_TAG_SUGGESTIONS.join(' • ')}</Text>
+            <Text style={dc.tagHint}>Suggested tags: {EVIDENCE_TAG_SUGGESTIONS.join(' � ')}</Text>
             <TouchableOpacity style={dc.closeUploadBtn} onPress={() => setShowUploadModal(false)} activeOpacity={0.85}>
               <Text style={dc.closeUploadTxt}>Cancel</Text>
             </TouchableOpacity>
@@ -583,7 +787,7 @@ function DocsTab({
   );
 }
 
-// ─── Ask AI Tab ───────────────────────────────────────────────────────────────
+// --- Ask AI Tab ---------------------------------------------------------------
 function AskAITab({ c }: { c: AnyCase }) {
   const router = useRouter();
   const questions = [
@@ -592,7 +796,7 @@ function AskAITab({ c }: { c: AnyCase }) {
     `How strong is my case right now?`,
     'Explain what happened in simple words',
     'What will the judge look at?',
-    `How long will ${c.title.split('—')[0].trim()} take?`,
+    `How long will ${c.title.split('�')[0].trim()} take?`,
   ];
   return (
     <View style={ai.root}>
@@ -600,7 +804,7 @@ function AskAITab({ c }: { c: AnyCase }) {
         <View style={ai.bannerIcon}><MaterialIcons name="auto-awesome" size={22} color={Colors.gold} /></View>
         <View style={{ flex: 1 }}>
           <Text style={ai.bannerTitle}>Ask Anything About Your Case</Text>
-          <Text style={ai.bannerSub}>AI trained on Indian law — answers in plain English</Text>
+          <Text style={ai.bannerSub}>AI trained on Indian law � answers in plain English</Text>
         </View>
       </View>
       <Text style={ai.stratLabel}>AI says right now:</Text>
@@ -632,7 +836,7 @@ function AskAITab({ c }: { c: AnyCase }) {
   );
 }
 
-// ─── Your Lawyer Tab ──────────────────────────────────────────────────────────
+// --- Your Lawyer Tab ----------------------------------------------------------
 function YourLawyerTab({
   c,
   caseId,
@@ -713,7 +917,7 @@ function YourLawyerTab({
           <Text style={lw.desig}>{l?.designation ?? 'Advocate'}</Text>
           <View style={lw.ratingRow}>
             <MaterialIcons name="star" size={12} color={Colors.gold} />
-            <Text style={lw.rating}>{l?.rating?.average ?? '—'}</Text>
+            <Text style={lw.rating}>{l?.rating?.average ?? '�'}</Text>
             <Text style={lw.ratingCount}>({l?.rating?.totalReviews ?? 0} reviews)</Text>
             <View style={lw.metaDot} />
             <Text style={lw.exp}>{l?.experienceYears ?? 0} years experience</Text>
@@ -740,9 +944,9 @@ function YourLawyerTab({
       {/* Stats */}
       <View style={lw.statsRow}>
         {[
-          { v: `${l?.cases?.winRatePercent ?? '—'}%`, l: 'Win Rate' },
-          { v: `${l?.cases?.total ?? '—'}+`, l: 'Cases Handled' },
-          { v: `${l?.experienceYears ?? '—'} yrs`, l: 'Experience' },
+          { v: `${l?.cases?.winRatePercent ?? '�'}%`, l: 'Win Rate' },
+          { v: `${l?.cases?.total ?? '�'}+`, l: 'Cases Handled' },
+          { v: `${l?.experienceYears ?? '�'} yrs`, l: 'Experience' },
         ].map((st, i, arr) => (
           <React.Fragment key={st.l}>
             <View style={lw.statItem}>
@@ -773,7 +977,7 @@ function YourLawyerTab({
         {activeReviewTicket && (
           <View style={lw.reviewBadge}>
             <Text style={lw.reviewBadgeTxt}>
-              Review in progress (ETA: 48h) • {activeReviewTicket.status}
+              Review in progress (ETA: 48h) � {activeReviewTicket.status}
             </Text>
           </View>
         )}
@@ -806,7 +1010,7 @@ function YourLawyerTab({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// --- Main Screen --------------------------------------------------------------
 const TABS = [
   { key: 'todo',    label: 'What To Do' },
   { key: 'events',  label: 'Events' },
@@ -866,7 +1070,7 @@ export default function CaseDetailScreen() {
     Alert.alert('Reminder Set', 'You will be reminded before the next hearing.');
   }, [activeCase, addReminder]);
 
-  const handleUploadDocument = useCallback(async (kind: 'document' | 'video' | 'audio' | 'chat' | 'official') => {
+  const handleUploadDocument = useCallback(async (kind: 'document' | 'video' | 'audio' | 'chat' | 'official', folder: EvidenceFolder) => {
     if (!activeCase?.id) return;
     const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
     if (result.canceled) return;
@@ -891,6 +1095,7 @@ export default function CaseDetailScreen() {
       caseTag: String(activeCase.chips?.[0] ?? activeCase.title ?? 'General'),
       tags: inferredType === 'chat' ? ['Communication Proof'] : inferredType === 'official' ? ['Identity Proof'] : inferredType === 'video' || inferredType === 'audio' ? ['Abuse Evidence'] : ['Financial Evidence'],
       uploadedBy: 'user',
+      folder,
       verificationStatus: inferredType === 'official' ? 'verified' : 'pending',
       courtReady: inferredType === 'official',
       size: file.size ?? 0,
@@ -912,6 +1117,12 @@ export default function CaseDetailScreen() {
 
   const handleDeleteDocument = useCallback((docId: string) => {
     if (!activeCase?.id) return;
+    const targetDoc = (activeCase.documents ?? []).find((item: any) => item.id === docId);
+    if (!targetDoc) return;
+    if (targetDoc.uploadedBy === 'lawyer') {
+      Alert.alert('Permission denied', 'You can only delete documents uploaded by you.');
+      return;
+    }
     deleteDocument(activeCase.id, docId);
   }, [activeCase, deleteDocument]);
 
@@ -932,14 +1143,14 @@ export default function CaseDetailScreen() {
   }, [refreshLawyerReviewSLAs]);
 
   const handleOpenLawyerProfile = useCallback((lawyerId: string) => {
-    router.push({ pathname: '/lawyer/[id]', params: { id: lawyerId } });
+    router.push({ pathname: '/lawyer/[id]', params: { id: lawyerId } } as any);
   }, [router]);
 
   const handleCreateReviewTicket = useCallback(async ({ reason, note, type }: { reason: string; note: string; type: 'LAWYER_CHANGE_REQUEST' }) => {
     if (!activeCase?.id) throw new Error('Missing case');
     const ticketId = createLawyerReviewTicket({
       caseId: activeCase.id,
-      lawyerId: activeCase?.lawyer?.id ?? activeCase?.lawyer?.lawyerId,
+      lawyerId: activeCase?.lawyer?.id ?? (activeCase?.lawyer as any)?.lawyerId,
       reason,
       note,
     });
@@ -1014,13 +1225,13 @@ export default function CaseDetailScreen() {
     if (!activeCase?.id) throw new Error('Missing case');
     const ticketId = createLawyerReviewTicket({
       caseId: activeCase.id,
-      lawyerId: activeCase?.lawyer?.id ?? activeCase?.lawyer?.lawyerId,
+      lawyerId: activeCase?.lawyer?.id ?? (activeCase?.lawyer as any)?.lawyerId,
       reason: 'Own lawyer added',
       note: `${name} (${phone})`,
     });
     addEvent(activeCase.id, {
       title: 'Own Lawyer Added for Verification',
-      description: `${name} (${phone})${firm ? ` • ${firm}` : ''}${email ? ` • ${email}` : ''}`,
+      description: `${name} (${phone})${firm ? ` � ${firm}` : ''}${email ? ` � ${email}` : ''}`,
       date: new Date().toISOString(),
       type: 'support',
     });
@@ -1046,13 +1257,11 @@ export default function CaseDetailScreen() {
 
   const categoryLabel  = getCategoryLabel(activeCase.category ?? '');
   const categoryCount  = allCases.filter((c) => c.category === activeCase.category).length;
-  const u = URG[activeCase.urgency] ?? URG.medium;
-
   return (
     <View style={s.root}>
       <SafeAreaView edges={['top']} style={{ backgroundColor: Colors.bgPrimary }} />
 
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <View style={s.header}>
         <TouchableOpacity onPress={handleBack} style={s.backPill} hitSlop={10} activeOpacity={0.8}>
           <MaterialIcons name="arrow-back-ios" size={13} color={Colors.textSecondary} />
@@ -1067,7 +1276,7 @@ export default function CaseDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Case Selector ── */}
+      {/* -- Case Selector -- */}
       <CaseSelector
         allCases={allCases}
         activeId={activeCaseId}
@@ -1075,7 +1284,7 @@ export default function CaseDetailScreen() {
         onAdd={() => router.push({ pathname: '/(tabs)/cases', params: { openNew: '1', source: 'case_selector_add', category: activeCase.category } })}
       />
 
-      {/* ── Stage progress strip ── */}
+      {/* -- Stage progress strip -- */}
       <View style={s.stageStrip}>
         <View style={s.stageTrack}>
           {activeCase.stages.map((st, idx) => (
@@ -1101,46 +1310,35 @@ export default function CaseDetailScreen() {
         </View>
       </View>
 
+      {/* -- Tab Bar (always visible/clickable) -- */}
+      <View style={s.tabBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabContent}>
+          {TABS.map((tab, idx) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[s.tab, activeTab === idx && s.tabActive]}
+              onPress={() => setActiveTab(idx)}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.tabTxt, activeTab === idx && s.tabTxtActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       {activeTab === 2 ? (
         // Docs tab contains a FlatList (Add Evidence list), so keep it out of any parent vertical ScrollView.
         <View style={s.docsContainer}>
-          <View style={s.tabBar}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabContent}>
-              {TABS.map((tab, idx) => (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[s.tab, activeTab === idx && s.tabActive]}
-                  onPress={() => setActiveTab(idx)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[s.tabTxt, activeTab === idx && s.tabTxtActive]}>{tab.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
           <View style={s.docsBody}>
             <DocsTab c={activeCase} onUpload={handleUploadDocument} onView={handleViewDocument} onDelete={handleDeleteDocument} onToggleCourtReady={handleToggleCourtReady} />
           </View>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[0]}>
-          {/* ── Tab Bar (sticky) ── */}
-          <View style={s.tabBar}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabContent}>
-              {TABS.map((tab, idx) => (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[s.tab, activeTab === idx && s.tabActive]}
-                  onPress={() => setActiveTab(idx)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[s.tabTxt, activeTab === idx && s.tabTxtActive]}>{tab.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* ── Tab Content ── */}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* -- Tab Content -- */}
           <View style={s.tabBody}>
             {activeTab === 0 && <WhatToDoTab c={activeCase} onGoToDocs={() => setActiveTab(2)} onGoToAI={() => setActiveTab(3)} onRemind={handleRemind} />}
             {activeTab === 1 && <EventsTab c={activeCase} />}
@@ -1165,7 +1363,7 @@ export default function CaseDetailScreen() {
         </ScrollView>
       )}
 
-      {/* ── Case Actions bottom sheet (3-dot menu) ── */}
+      {/* -- Case Actions bottom sheet (3-dot menu) -- */}
       <CaseActionsSheet
         visible={actionsSheetOpen}
         onClose={() => setActionsSheetOpen(false)}
@@ -1182,7 +1380,7 @@ export default function CaseDetailScreen() {
   );
 }
 
-// ─── Main Styles ──────────────────────────────────────────────────────────────
+// --- Main Styles --------------------------------------------------------------
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bgPrimary },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle },
@@ -1206,7 +1404,13 @@ const s = StyleSheet.create({
   stageLblDone: { color: Colors.textTertiary },
   stageLblActive: { color: Colors.gold, fontWeight: '800' },
 
-  tabBar: { backgroundColor: Colors.bgPrimary, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  tabBar: {
+    backgroundColor: Colors.bgPrimary,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    zIndex: 20,
+    elevation: 12,
+  },
   tabContent: { paddingHorizontal: 12, gap: 2 },
   tab: { paddingHorizontal: 14, paddingVertical: 12 },
   tabActive: { borderBottomWidth: 2, borderBottomColor: Colors.primary },
@@ -1217,7 +1421,7 @@ const s = StyleSheet.create({
   docsBody: { flex: 1, padding: 16 },
 });
 
-// ─── Case Selector Styles ─────────────────────────────────────────────────────
+// --- Case Selector Styles -----------------------------------------------------
 const cs = StyleSheet.create({
   wrap: { backgroundColor: Colors.bgSecondary, borderBottomWidth: 1, borderBottomColor: Colors.borderSubtle, paddingTop: 10 },
   row: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingBottom: 10 },
@@ -1232,7 +1436,7 @@ const cs = StyleSheet.create({
   otherTxt: { fontSize: 10, color: Colors.textTertiary },
 });
 
-// ─── What To Do Tab Styles ────────────────────────────────────────────────────
+// --- What To Do Tab Styles ----------------------------------------------------
 const td = StyleSheet.create({
   root: { gap: 14 },
   nextCard: { borderRadius: 18, padding: 16, gap: 14, borderWidth: 1 },
@@ -1290,7 +1494,7 @@ const td = StyleSheet.create({
   quickBtnTxt: { fontSize: 13, fontWeight: '700' },
 });
 
-// ─── Events Styles ────────────────────────────────────────────────────────────
+// --- Events Styles ------------------------------------------------------------
 const ev = StyleSheet.create({
   root: { gap: 0 },
   intro: { fontSize: 13, color: Colors.textSecondary, marginBottom: 16, lineHeight: 20 },
@@ -1313,9 +1517,21 @@ const ev = StyleSheet.create({
   personTxt: { fontSize: 10, color: Colors.textTertiary },
 });
 
-// ─── Docs Styles ──────────────────────────────────────────────────────────────
+// --- Docs Styles --------------------------------------------------------------
 const dc = StyleSheet.create({
   root: { gap: 0 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
+  folderGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
+  folderCard: { width: '47%', backgroundColor: Colors.bgSecondary, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 8 },
+  folderIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  folderName: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
+  folderCount: { fontSize: 12, color: Colors.textSecondary },
+  docList: { gap: 8, marginBottom: 14 },
+  docRowMini: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.bgSecondary, borderRadius: 12, padding: 11, borderWidth: 1, borderColor: Colors.border },
+  folderHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  backFolderBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primarySubtle, borderRadius: 999, borderWidth: 1, borderColor: Colors.primary + '44', paddingHorizontal: 10, paddingVertical: 6 },
+  backFolderTxt: { color: Colors.primary, fontSize: 11, fontWeight: '700' },
+  folderHeaderTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
   searchInput: {
     backgroundColor: Colors.bgSecondary,
     borderRadius: 12,
@@ -1389,12 +1605,20 @@ const dc = StyleSheet.create({
   uploadModalTitle: { color: Colors.textPrimary, fontSize: 16, fontWeight: '800', marginBottom: 10 },
   uploadOption: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 44, borderRadius: 10, paddingHorizontal: 10, backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   uploadOptionTxt: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600' },
+  modalSub: { color: Colors.textSecondary, fontSize: 11, marginBottom: 8 },
+  folderChipRow: { flexDirection: 'row', gap: 8, paddingBottom: 10 },
+  folderChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border },
+  folderChipActive: { backgroundColor: Colors.primarySubtle, borderColor: Colors.primary },
+  folderChipTxt: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
+  folderChipTxtActive: { color: Colors.primary, fontWeight: '700' },
+  readOnlyPill: { marginTop: 8, alignSelf: 'flex-start', backgroundColor: Colors.bgElevated, borderRadius: 999, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 9, paddingVertical: 4 },
+  readOnlyTxt: { color: Colors.textTertiary, fontSize: 10, fontWeight: '600' },
   tagHint: { color: Colors.textTertiary, fontSize: 11, marginTop: 8, lineHeight: 17 },
   closeUploadBtn: { marginTop: 12, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgElevated, borderWidth: 1, borderColor: Colors.border },
   closeUploadTxt: { color: Colors.textSecondary, fontSize: 13, fontWeight: '700' },
 });
 
-// ─── AI Tab Styles ────────────────────────────────────────────────────────────
+// --- AI Tab Styles ------------------------------------------------------------
 const ai = StyleSheet.create({
   root: { gap: 13 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.bgSecondary, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: Colors.goldSubtle },
@@ -1411,7 +1635,7 @@ const ai = StyleSheet.create({
   openTxt: { fontSize: 14, fontWeight: '800', color: '#fff', letterSpacing: 0.3 },
 });
 
-// ─── Lawyer Styles ────────────────────────────────────────────────────────────
+// --- Lawyer Styles ------------------------------------------------------------
 const lw = StyleSheet.create({
   root: { gap: 14 },
   card: { flexDirection: 'row', gap: 14, backgroundColor: Colors.bgSecondary, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: Colors.border },

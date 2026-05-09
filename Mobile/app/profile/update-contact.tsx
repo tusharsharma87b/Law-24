@@ -38,7 +38,7 @@ export default function UpdateContactScreen() {
     setError(null);
     setSuccess(null);
     try {
-      if (otp !== '123456') throw new Error('Invalid OTP.');
+      if (otp.trim() !== '123456') throw new Error('Verification failed.');
       await wait(700);
       if (!user) throw new Error('Session expired.');
       login({ ...user, phone: phone.trim() || user.phone, email: email.trim() || user.email });

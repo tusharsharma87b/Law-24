@@ -1,26 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Switch, ScrollView, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { useAuthStore } from '../../store/useAuthStore';
+import { sendOtp } from '../../src/services/authService';
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [whatsapp, setWhatsapp] = useState(true);
   const router = useRouter();
   const setWhatsappStore = useAuthStore((s) => s.setWhatsapp);
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7558/ingest/e2a760d8-9665-4f24-a1b8-077894e54057',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a08cc0'},body:JSON.stringify({sessionId:'a08cc0',runId:'mobile-boot',hypothesisId:'H26',location:'app/(auth)/login.tsx:20',message:'Login screen mounted',data:{platform:Platform.OS},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, []);
 
   const validate = () => {
     if (!phone) { setError('Please enter your mobile number'); return false; }
@@ -30,16 +25,20 @@ export default function LoginScreen() {
     setError(''); return true;
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!validate()) return;
-    router.push({ pathname: '/(auth)/otp', params: { type: 'phone', value: phone } });
+    try {
+      setLoading(true);
+      await sendOtp(phone, 'phone');
+      router.push({ pathname: '/(auth)/otp', params: { type: 'phone', value: phone } });
+    } catch (e) {
+      setError((e as Error).message || 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleGoogle = () => {
-    const mockUser = { id: 'USR-001', name: 'Anjali Singh', phone: '', email: 'anjali@gmail.com', plan: 'free' as const, clientId: '#621', avatarInitials: 'AS' };
-    useAuthStore.getState().login(mockUser);
-    router.replace('/(tabs)');
-  };
+  const handleGoogle = () => { Alert.alert('Google login', 'Coming soon. Please continue with OTP.'); };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -75,7 +74,7 @@ export default function LoginScreen() {
             onPress={handleContinue}
             activeOpacity={0.85}
           >
-            <Text style={styles.ctaText}>Continue Securely</Text>
+            <Text style={styles.ctaText}>{loading ? 'Sending OTP...' : 'Continue Securely'}</Text>
           </TouchableOpacity>
 
           <Text style={styles.trust}>PRIVATE  •  SECURE  •  VERIFIED  LEGAL NETWORK</Text>
@@ -109,7 +108,7 @@ export default function LoginScreen() {
           <View style={styles.socialRow}>
             <TouchableOpacity
               style={styles.socialBtnHalf}
-              onPress={() => router.push({ pathname: '/(auth)/otp', params: { type: 'email', value: 'user@law24.in' } })}
+              onPress={() => Alert.alert('Email OTP', 'Please continue with mobile OTP for now.')}
               activeOpacity={0.8}
             >
               <MaterialIcons name="email" size={18} color="#22C55E" />
@@ -117,7 +116,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.socialBtnHalf}
-              onPress={() => { Alert.alert('Truecaller', 'Auto-login via Truecaller (demo)'); handleGoogle(); }}
+              onPress={() => { Alert.alert('Truecaller', 'Coming soon. Please continue with OTP.'); }}
               activeOpacity={0.8}
             >
               <MaterialIcons name="verified-user" size={18} color="#3B5BDB" />
@@ -128,7 +127,7 @@ export default function LoginScreen() {
 
         {/* TESTIMONIAL */}
         <View style={styles.testimonial}>
-          <Text style={styles.quote}>"Helped me understand my situation clearly."</Text>
+          <Text style={styles.quote}>&quot;Helped me understand my situation clearly.&quot;</Text>
           <Text style={styles.quoteName}>— VERIFIED USER</Text>
         </View>
 

@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  LAWYER
+  ADMIN
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionSource {
+  RAZORPAY
+  LAWYER_FEE
+  REFUND
+  NYAYA_CREDITS
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum CaseStatus {
+  FILING
+  HEARING
+  JUDGEMENT
+  CLOSED
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+}
+
+enum UploadedBy {
+  USER
+  LAWYER
+}
+
+model User {
+  id             String        @id @default(uuid())
+  role           UserRole      @default(USER)
+  name           String
+  email          String        @unique
+  emailVerified  Boolean       @default(false)
+  phone          String?       @unique
+  phoneVerified  Boolean       @default(false)
+  profilePhoto   String?
+  address        String?
+  city           String?
+  state          String?
+  pincode        String?
+  passwordHash   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  sessions       Session[]
+  otps           OtpCode[]
+  wallet         Wallet?
+  cases          Case[]
+  notifications  Notification[]
+  transactions   Transaction[]
+  credits        Credit?
+  auditLogs      AuditLog[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  refreshToken String
+  deviceId     String?
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
+model OtpCode {
+  id         String   @id @default(cuid())
+  target     String
+  code       String
+  purpose    String
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  verifiedAt DateTime?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  balance   Decimal  @default(0.00) @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+  userId         String
+  user           User              @relation(fields: [userId], references: [id])
+  type           TransactionType
+  amount         Decimal           @db.Decimal(12, 2)
+  source         TransactionSource
+  status         TransactionStatus
+  referenceId    String?
+  idempotencyKey String?           @unique
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+}
+
+model Credit {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+  dailyFreeLimit   Int      @default(15)
+  remainingToday   Int      @default(15)
+  purchasedCredits Int      @default(0)
+  dayKey           String
+  updatedAt        DateTime @updatedAt
+}
+
+model Case {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  category    String
+  title       String?
+  type        String?
+  state       String?
+  city        String?
+  filedDate   DateTime
+  hearingDate DateTime
+  status      CaseStatus  @default(FILING)
+  urgency     String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  events      CaseEvent[]
+  folders     Folder[]
+  documents   Document[]
+}
+
+model CaseEvent {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id])
+  type        String
+  title       String
+  description String
+  date        DateTime
+  createdAt   DateTime @default(now())
+}
+
+model Folder {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id])
+  name      String
+  createdAt DateTime @default(now())
+  documents Document[]
+}
+
+model Document {
+  id         String         @id @default(uuid())
+  caseId     String
+  case       Case           @relation(fields: [caseId], references: [id])
+  folderId   String?
+  folder     Folder?        @relation(fields: [folderId], references: [id])
+  name       String
+  size       Int
+  url        String
+  type       String?
+  tags       Json?
+  verificationStatus String?
+  courtReady Boolean       @default(false)
+  uploadedBy UploadedBy
+  status     DocumentStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+}
+
+model Lawyer {
+  id            String   @id @default(cuid())
+  name          String
+  specialization String
+  experience    Int
+  languages     String[]
+  pricePerMin   Decimal  @db.Decimal(10, 2)
+  rating        Decimal  @default(0) @db.Decimal(3, 2)
+  availability  Boolean  @default(true)
+  city          String?
+  state         String?
+  createdAt     DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}

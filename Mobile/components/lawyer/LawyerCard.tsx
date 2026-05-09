@@ -1,11 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
 import type { Lawyer } from '../../constants/mockData';
-import { AppIcon } from '../ui/AppIcon';
+import { Avatar } from '../ui/Avatar';
 
 const SPACING = {
   xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+} as const;
+
+const RADIUS = {
   sm: 8,
   md: 12,
   lg: 16,
@@ -25,6 +33,10 @@ export type LawyerCardModel = {
   city: string;
   courtLabel: string;
   verified?: boolean;
+  availability: "online" | "offline";
+  experience: number;
+  totalReviews: number;
+  nextAvailableIn: number;
 };
 
 export function mapLawyerToCardModel(l: Lawyer): LawyerCardModel {
@@ -37,6 +49,7 @@ export function mapLawyerToCardModel(l: Lawyer): LawyerCardModel {
         ? 'Supreme Court'
         : 'District Court';
 
+  const lawyerAny = l as any;
   return {
     id: l.id,
     name: l.name,
@@ -50,150 +63,283 @@ export function mapLawyerToCardModel(l: Lawyer): LawyerCardModel {
     city: l.city,
     courtLabel,
     verified: l.verified,
+    availability: lawyerAny.availability ?? (l.isOnline ? "online" : "offline"),
+    experience: lawyerAny.experience ?? l.experienceYears,
+    totalReviews: lawyerAny.totalReviews ?? l.rating.totalReviews,
+    nextAvailableIn: lawyerAny.nextAvailableIn ?? (l.isOnline ? 0 : 30),
   };
 }
 
 type Props = {
   data: LawyerCardModel;
   onPress: () => void;
-  ctaLabel?: 'Talk Now' | 'Consult';
+  onCtaPress?: () => void;
 };
 
-export function LawyerCard({ data, onPress, ctaLabel = 'Talk Now' }: Props) {
-  const respondMins = data.isOnline
-    ? Math.min(2, Math.max(1, data.responseTimeMinutes))
-    : Math.max(1, data.responseTimeMinutes);
+export function LawyerCard({ data, onPress, onCtaPress }: Props) {
+  const isOnline = data.availability === 'online';
+  const ctaLabel = isOnline ? 'Join Queue' : 'Book Now';
+  const availabilityText = isOnline
+    ? data.nextAvailableIn > 0
+      ? `Available in ${data.nextAvailableIn} mins`
+      : 'Available now'
+    : 'Offline';
+
+  const handleCtaPress = (e: any) => {
+    e.stopPropagation();
+    if (onCtaPress) onCtaPress();
+    else onPress(); // fallback
+  };
 
   return (
-    <View style={styles.shadowContainer}>
-      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
-        {data.isOnline ? (
-          <View style={styles.onlineBadge}>
-            <Text style={styles.onlineText}>Online</Text>
-          </View>
-        ) : null}
+    <Pressable style={styles.cardContainer} onPress={onPress}>
+      <LinearGradient
+        colors={['#0B1220', '#111827', '#0B1220']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.card}
+      >
+        {/* Avatar with online badge */}
+        <View style={styles.avatarContainer}>
+          <Avatar
+            name={data.name}
+            initials={data.initials}
+            color={data.avatarColor}
+            size={64}
+            verified={data.verified}
+            online={false} // we'll handle badge ourselves
+          />
+          {isOnline && <View style={styles.onlineDot} />}
+          {data.verified && (
+            <View style={styles.verifiedBadge}>
+              <Text style={styles.verifiedText}>✓</Text>
+            </View>
+          )}
+        </View>
 
+        {/* Main content */}
         <View style={styles.content}>
-          <View style={styles.topRow}>
-            <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>{data.initials}</Text>
+          {/* Name row */}
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>{data.name}</Text>
+            <View style={styles.experienceBadge}>
+              <Text style={styles.experienceText}>{data.experience}y</Text>
             </View>
           </View>
 
-          <Text style={styles.name} numberOfLines={1}>{data.name}</Text>
-          <Text style={styles.cityCourt} numberOfLines={1}>{data.city} • {data.courtLabel}</Text>
-          <Text style={styles.spec} numberOfLines={1}>{data.specialization}</Text>
-          <Text style={styles.respond}>Responds in {respondMins} mins</Text>
+          {/* Details */}
+          <Text style={styles.details}>
+            {data.city} • {data.specialization} • {data.courtLabel}
+          </Text>
 
-          <View style={styles.metaRow}>
-            <View style={styles.ratingRow}>
-              <AppIcon name="rating" size={16} color={Colors.gold} />
-              <Text style={styles.ratingTxt}>{data.ratingAverage.toFixed(1)}</Text>
+          {/* Rating & Price row */}
+          <View style={styles.ratingPriceRow}>
+            <View style={styles.ratingContainer}>
+              <Text style={styles.ratingStar}>⭐</Text>
+              <Text style={styles.ratingText}>{data.ratingAverage.toFixed(1)}</Text>
+              <Text style={styles.reviewCount}>({data.totalReviews} reviews)</Text>
             </View>
-            <Text style={styles.price}>₹{data.chatPerMinuteInr}/min</Text>
+            <View style={styles.priceContainer}>
+              <Text style={styles.price}>₹{data.chatPerMinuteInr}</Text>
+              <Text style={styles.priceUnit}>/min</Text>
+            </View>
+          </View>
+
+          {/* Availability & Response Time */}
+          <View style={styles.availabilityRow}>
+            <View style={[styles.availabilityBadge, isOnline ? styles.onlineBadge : styles.offlineBadge]}>
+              <Text style={styles.availabilityText}>{availabilityText}</Text>
+            </View>
+            <Text style={styles.responseTime}>Response: {data.responseTimeMinutes} min</Text>
           </View>
         </View>
+      </LinearGradient>
 
-        <View style={styles.cta}>
-          <Text style={styles.ctaTxt}>{ctaLabel}</Text>
-        </View>
-      </TouchableOpacity>
-    </View>
+      {/* CTA Button - separate Pressable to avoid triggering card press */}
+      <Pressable style={styles.ctaContainer} onPress={handleCtaPress}>
+        <LinearGradient
+          colors={isOnline ? ['#7C3AED', '#6D28D9'] : ['#4B5563', '#374151']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.ctaButton}
+        >
+          <Text style={styles.ctaText}>{ctaLabel}</Text>
+        </LinearGradient>
+      </Pressable>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  shadowContainer: {
-    borderRadius: 20,
-    backgroundColor: 'transparent',
+  cardContainer: {
+    marginBottom: SPACING.lg,
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 0,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   card: {
-    width: '100%',
-    minHeight: 236,
-    borderRadius: 20,
-    backgroundColor: '#0B1220',
-    padding: 16,
-    justifyContent: 'space-between',
-  },
-  content: { gap: 0 },
-  topRow: { flexDirection: 'row', alignItems: 'center' },
-  avatarContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#5B6EF5',
-  },
-  avatarText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  onlineBadge: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
+    padding: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    height: 24,
-    borderRadius: 999,
-    backgroundColor: 'rgba(34,197,94,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.25)',
+    minHeight: 200,
   },
-  onlineText: {
-    color: '#22C55E',
-    fontSize: 12,
-    fontWeight: '500',
+  avatarContainer: {
+    position: 'relative',
+    marginRight: SPACING.lg,
+  },
+  onlineDot: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.success,
+    borderWidth: 2,
+    borderColor: '#0B1220',
+    zIndex: 10,
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: '#0B1220',
+    zIndex: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verifiedText: {
+    color: Colors.textPrimary,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  content: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
   },
   name: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: SPACING.md,
+    color: Colors.textPrimary,
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
   },
-  cityCourt: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginTop: SPACING.xs,
+  experienceBadge: {
+    backgroundColor: 'rgba(245, 166, 35, 0.15)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: Colors.goldSubtle,
   },
-  spec: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    marginTop: SPACING.xs,
-  },
-  respond: {
-    color: '#6B7280',
+  experienceText: {
+    color: Colors.gold,
     fontSize: 12,
-    fontWeight: '500',
-    marginTop: SPACING.sm,
+    fontWeight: 'bold',
   },
-  metaRow: {
-    width: '100%',
+  details: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    marginBottom: SPACING.md,
+    lineHeight: 18,
+  },
+  ratingPriceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: SPACING.md,
+    marginBottom: SPACING.md,
   },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ratingTxt: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  price: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  cta: {
-    marginTop: SPACING.lg,
-    width: '100%',
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
+  ratingContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  ctaTxt: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  ratingStar: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  ratingText: {
+    color: Colors.gold,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginRight: 4,
+  },
+  reviewCount: {
+    color: Colors.textTertiary,
+    fontSize: 12,
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  price: {
+    color: Colors.textPrimary,
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  priceUnit: {
+    color: Colors.textTertiary,
+    fontSize: 12,
+    marginLeft: 2,
+  },
+  availabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  availabilityBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+  },
+  onlineBadge: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: Colors.successSubtle,
+  },
+  offlineBadge: {
+    backgroundColor: 'rgba(107, 115, 142, 0.15)',
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+  },
+  availabilityText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  onlineText: {
+    color: Colors.success,
+  },
+  offlineText: {
+    color: Colors.textTertiary,
+  },
+  responseTime: {
+    color: Colors.textTertiary,
+    fontSize: 12,
+  },
+  ctaContainer: {
+    marginTop: 1,
+  },
+  ctaButton: {
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: RADIUS.lg,
+  },
+  ctaText: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
-

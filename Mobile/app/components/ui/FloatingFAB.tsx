@@ -1,2 +1,3 @@
-export { FloatingFAB } from '../../../components/ui/FloatingFAB';
+import FloatingAIButton from "../../../components/ui/FloatingAIButton";
 
+export default FloatingAIButton;
