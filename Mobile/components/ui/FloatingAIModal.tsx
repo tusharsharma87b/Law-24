@@ -1,16 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Dimensions,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Modal from 'react-native-modal';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Platform, Modal as RNModal } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { BASE_URL } from '../../src/config/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,6 +33,33 @@ export default function FloatingAIModal({ visible, onClose }: FloatingAIModalPro
     }, 100);
   };
 
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const handleAIConsult = async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    try {
+      const response = await fetch(`${BASE_URL}/ai-consult`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ issue: 'legal consultation' }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      Alert.alert('AI Consult Summary', data.summary || 'No summary provided.');
+    } catch (error) {
+      console.error('AI consult failed:', error);
+      Alert.alert('Error', 'Failed to get AI consult. Please try again later.');
+    } finally {
+      setAiLoading(false);
+      onClose();
+    }
+  };
+
   const ModalContent = () => (
     <View style={styles.content}>
       <View style={styles.handle} />
@@ -38,19 +68,28 @@ export default function FloatingAIModal({ visible, onClose }: FloatingAIModalPro
       <Text style={styles.subtitle}>Our AI and Legal Experts are ready to assist you.</Text>
 
       <View style={styles.options}>
-        <TouchableOpacity 
-          style={[styles.option, styles.primaryOption]} 
-          onPress={() => handleAction('/nyaya')}
+        <TouchableOpacity
+          style={[styles.option, styles.primaryOption]}
+          onPress={handleAIConsult}
           activeOpacity={0.8}
+          disabled={aiLoading}
         >
           <View style={styles.iconWrap}>
             <MaterialIcons name="auto-awesome" size={24} color={Colors.gold} />
           </View>
           <View style={styles.optionTextWrap}>
-            <Text style={styles.optionTitle}>Chat with Nyaya AI</Text>
-            <Text style={styles.optionSub}>Instant answers to legal queries</Text>
+            {aiLoading ? (
+              <ActivityIndicator size="small" color={Colors.gold} />
+            ) : (
+              <>
+                <Text style={styles.optionTitle}>Chat with Nyaya AI</Text>
+                <Text style={styles.optionSub}>Instant answers to legal queries</Text>
+              </>
+            )}
           </View>
-          <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.3)" />
+          {!aiLoading && (
+            <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.3)" />
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity 

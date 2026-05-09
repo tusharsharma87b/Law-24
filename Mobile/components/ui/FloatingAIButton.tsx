@@ -12,13 +12,13 @@ import {
   View,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, usePathname, useSegments } from 'expo-router';
 import { useAuthStore } from '../../store/useAuthStore';
 import FloatingAIModal from './FloatingAIModal';
+import { Colors } from '../../constants/colors';
 
-const BTN_SIZE = 60;
+const BTN_SIZE = 56;
 const MARGIN = 16;
 
 export default function FloatingAIButton() {
@@ -152,9 +152,9 @@ export default function FloatingAIButton() {
             onPress={handlePress}
             style={styles.touch}
           >
-            <LinearGradient colors={['#7C6CF8', '#4A6CF7']} style={styles.btn}>
+            <View style={[styles.btn, { backgroundColor: Colors.primary }]}>
               <MaterialIcons name="auto-awesome" size={28} color="#fff" />
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         </Animated.View>
         <FloatingAIModal visible={modalVisible} onClose={() => setModalVisible(false)} />
@@ -177,12 +177,9 @@ export default function FloatingAIButton() {
             onPress={handlePress}
             style={styles.touch}
           >
-            <LinearGradient
-              colors={['#7C6CF8', '#4A6CF7']}
-              style={styles.btn}
-            >
+            <View style={[styles.btn, { backgroundColor: Colors.primary }]}>
               <MaterialIcons name="auto-awesome" size={28} color="#fff" />
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>
@@ -217,7 +214,7 @@ const styles = StyleSheet.create({
     width: BTN_SIZE,
     height: BTN_SIZE,
     borderRadius: BTN_SIZE / 2,
-    shadowColor: '#4A6CF7',
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 10,

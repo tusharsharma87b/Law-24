@@ -4,6 +4,27 @@ import { BASE_URL } from '../config/api';
 const TOKEN_KEY = 'law24_access_token';
 const LEGACY_TOKEN_KEY = 'token';
 
+// Helper to add timeout to fetch
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number = 10000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
+
 type UnauthorizedCallback = () => void;
 const unauthorizedListeners = new Set<UnauthorizedCallback>();
 
@@ -106,14 +127,18 @@ async function request(method: 'GET' | 'POST', endpoint: string, body?: unknown)
   console.log('[API REQUEST]', JSON.stringify(reqLog, null, 2));
 
   try {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(sendAuth && token ? { Authorization: `Bearer ${token.replace(/^Bearer\s+/i, '')}` } : {}),
+    const res = await fetchWithTimeout(
+      `${BASE_URL}${path}`,
+      {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sendAuth && token ? { Authorization: `Bearer ${token.replace(/^Bearer\s+/i, '')}` } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
+      10000 // 10 seconds timeout
+    );
 
     console.log('[API RESPONSE] Status:', res.status, 'URL:', res.url);
 

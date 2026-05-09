@@ -1,20 +1,26 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Pressable, Animated } from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Pressable, Animated, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { LAWYERS } from '../../data/lawyers';
 import { Colors } from '../../constants/colors';
-import { Avatar } from '../../components/ui/Avatar';
 import { Chip } from '../../components/ui/Chip';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { submitCallRequest, submitReview as submitReviewApi } from '../../src/services/lawyerService';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useLawyerDataStore } from '../../store/useLawyerDataStore';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LawyerProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
+  const [callLoading, setCallLoading] = useState(false);
+  const [callSuccess, setCallSuccess] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState(false);
 
   // Animation refs for button press scaling
   const primaryBtnScale = useRef(new Animated.Value(1)).current;
@@ -26,8 +32,30 @@ export default function LawyerProfile() {
   const modalSubmitBtnScale = useRef(new Animated.Value(1)).current;
   const starRatingScale = useRef(new Animated.Value(1)).current;
 
-  const lawyer = LAWYERS.find(l => l.id === id);
+  // Get lawyer data from store (single source of truth)
+  const { byId, isHydrating, hydrateLawyerData } = useLawyerDataStore();
+  const lawyer = byId[id as string];
 
+  // Preload lawyer data if not in store
+  useEffect(() => {
+    if (!lawyer && !isHydrating) {
+      hydrateLawyerData();
+    }
+  }, [lawyer, isHydrating, hydrateLawyerData]);
+
+  // Show loading while hydrating and lawyer not found
+  if (isHydrating && !lawyer) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#4F46E5" />
+        <Text style={{ marginTop: 16, color: Colors.textSecondary }}>
+          Loading lawyer profile...
+        </Text>
+      </View>
+    );
+  }
+
+  // Show not found if lawyer doesn't exist after hydration
   if (!lawyer) {
     return (
       <View style={styles.center}>
@@ -59,12 +87,26 @@ export default function LawyerProfile() {
     setTimeout(() => setReviewModalVisible(true), 150);
   };
 
-  const submitReview = () => {
-    // TODO: Store review locally or send to backend
-    console.log('Review submitted:', { rating: reviewRating, comment: reviewComment });
-    setReviewModalVisible(false);
-    setReviewRating(5);
-    setReviewComment('');
+  const submitReview = async () => {
+    if (reviewLoading) return;
+    setReviewLoading(true);
+    try {
+      const payload = {
+        rating: reviewRating,
+        comment: reviewComment,
+      };
+      const response = await submitReviewApi(payload);
+      setReviewSuccess(true);
+      Alert.alert('Success', 'Your review has been submitted successfully.');
+      setReviewModalVisible(false);
+      setReviewRating(5);
+      setReviewComment('');
+    } catch (error) {
+      console.error('Review submission failed:', error);
+      Alert.alert('Error', 'Failed to submit review. Please try again later.');
+    } finally {
+      setReviewLoading(false);
+    }
   };
 
   // Animation functions for button press
@@ -98,9 +140,24 @@ export default function LawyerProfile() {
     // TODO: Implement chat functionality
   };
 
-  const handleCallPress = () => {
+  const handleCallPress = async () => {
     animateButtonPress(callBtnScale);
-    // TODO: Implement call functionality
+    if (callLoading) return;
+    setCallLoading(true);
+    try {
+      const payload = {
+        lawyerId: lawyer.id,
+        userId: user?.id || 'current-user', // fallback if user not available
+      };
+      const response = await submitCallRequest(payload);
+      setCallSuccess(true);
+      Alert.alert('Success', 'Call request submitted successfully. The lawyer will contact you shortly.');
+    } catch (error) {
+      console.error('Call request failed:', error);
+      Alert.alert('Error', 'Failed to submit call request. Please try again later.');
+    } finally {
+      setCallLoading(false);
+    }
   };
 
   const handleSchedulePress = () => {
@@ -119,14 +176,19 @@ export default function LawyerProfile() {
         <View style={styles.premiumHeader}>
           <View style={styles.headerTopRow}>
             <View style={styles.avatarContainerPremium}>
-              <Avatar
-                name={lawyer.name}
-                initials={lawyer.initials}
-                color={lawyer.avatarColor}
-                size={100}
-                verified={lawyer.verified}
-                online={false}
-              />
+              <View style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                overflow: 'hidden',
+                backgroundColor: '#1F2937',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>
+                  {lawyer.initials || lawyer.name?.charAt(0)}
+                </Text>
+              </View>
               {isOnline && <View style={styles.onlineDotPremium} />}
               {lawyer.verified && (
                 <View style={styles.verifiedBadgePremium}>
@@ -144,67 +206,51 @@ export default function LawyerProfile() {
                   </View>
                 )}
               </View>
-              <Text style={styles.metaPremium}>{lawyer.expertise} • {experience} years experience</Text>
+              <Text style={styles.metaPremium}>{lawyer.designation} • {experience} years experience</Text>
             </View>
           </View>
         </View>
 
-        {/* RATING BLOCK - LARGE RATING WITH STARS BELOW */}
+        {/* RATING BLOCK - SIMPLIFIED */}
         <View style={styles.ratingBlock}>
-          <Text style={styles.ratingLarge}>{lawyer.rating.average.toFixed(1)}</Text>
-          <Text style={styles.ratingStarsLarge}>★★★★★</Text>
-          <Text style={styles.ratingCountSmall}>({totalReviews} reviews)</Text>
+          <Text style={styles.ratingSimple}>
+            ⭐ {lawyer.rating.average.toFixed(1)} ({totalReviews} reviews)
+          </Text>
         </View>
 
         {/* PRICING - CONSULTATION FEE */}
-        <View style={styles.pricingBlock}>
-          <Text style={styles.pricingLabel}>Consultation Fee</Text>
-          <Text style={styles.pricingAmount}>₹{lawyer.price}</Text>
-          <Text style={styles.pricingUnit}>per minute</Text>
+        <View style={styles.pricingSimple}>
+          <Text style={styles.pricingLabel}>Consultation Fee: ₹{lawyer.fees?.chatPerMinuteInr || 25}/min</Text>
         </View>
 
-        {/* TRUST STATS - HORIZONTAL SCROLL CARDS */}
-        <View style={styles.statsScrollContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.statsScrollContent}
-          >
-            {/* Win Rate Card */}
-            <View style={styles.statCard}>
-              <Text style={styles.statCardValue}>{lawyer.cases?.winRatePercent || 90}%</Text>
-              <Text style={styles.statCardLabel}>Win Rate</Text>
-              <Text style={styles.statCardSubtext}>High success</Text>
+        {/* TRUST STATS - INLINE STATS */}
+        <View style={styles.statsInlineContainer}>
+          <View style={styles.statsInlineRow}>
+            <View style={styles.statInlineItem}>
+              <Text style={styles.statInlineValue}>{lawyer.cases?.winRatePercent || 90}%</Text>
+              <Text style={styles.statInlineLabel}>Win Rate</Text>
             </View>
-
-            {/* Accuracy Card */}
-            <View style={styles.statCard}>
-              <Text style={styles.statCardValue}>98%</Text>
-              <Text style={styles.statCardLabel}>Accuracy</Text>
-              <Text style={styles.statCardSubtext}>Legal advice</Text>
+            <View style={styles.inlineStatDivider} />
+            <View style={styles.statInlineItem}>
+              <Text style={styles.statInlineValue}>98%</Text>
+              <Text style={styles.statInlineLabel}>Accuracy</Text>
             </View>
-
-            {/* Settlements Card */}
-            <View style={styles.statCard}>
-              <Text style={styles.statCardValue}>{lawyer.cases?.settled || 16}</Text>
-              <Text style={styles.statCardLabel}>Settlements</Text>
-              <Text style={styles.statCardSubtext}>Out of court</Text>
+            <View style={styles.inlineStatDivider} />
+            <View style={styles.statInlineItem}>
+              <Text style={styles.statInlineValue}>{lawyer.cases?.settled || 16}</Text>
+              <Text style={styles.statInlineLabel}>Settlements</Text>
             </View>
-
-            {/* Courts Card */}
-            <View style={styles.statCard}>
-              <Text style={styles.statCardValue}>{lawyer.courts?.length || 1}</Text>
-              <Text style={styles.statCardLabel}>Courts</Text>
-              <Text style={styles.statCardSubtext}>Practiced in</Text>
+            <View style={styles.inlineStatDivider} />
+            <View style={styles.statInlineItem}>
+              <Text style={styles.statInlineValue}>{lawyer.courts?.length || 1}</Text>
+              <Text style={styles.statInlineLabel}>Courts</Text>
             </View>
-
-            {/* Experience Card */}
-            <View style={styles.statCard}>
-              <Text style={styles.statCardValue}>{experience}</Text>
-              <Text style={styles.statCardLabel}>Years</Text>
-              <Text style={styles.statCardSubtext}>Experience</Text>
+            <View style={styles.inlineStatDivider} />
+            <View style={styles.statInlineItem}>
+              <Text style={styles.statInlineValue}>{experience}</Text>
+              <Text style={styles.statInlineLabel}>Years</Text>
             </View>
-          </ScrollView>
+          </View>
         </View>
 
         {/* ABOUT & EXPERTISE */}
@@ -319,19 +365,26 @@ export default function LawyerProfile() {
       </ScrollView>
 
       {/* STICKY BOTTOM CTA */}
-      <View style={[styles.stickyCtaContainer, { paddingBottom: stickyCtaBottomPadding }]}>
+      <View style={[styles.stickyCtaContainer, { paddingBottom: stickyCtaBottomPadding, gap: 16 }]}>
         <Animated.View style={[styles.stickyPrimaryBtn, { transform: [{ scale: primaryBtnScale }] }]}>
-          <TouchableOpacity
-            style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
-            onPress={handlePrimaryButtonPress}
-            activeOpacity={0.8}
+          <LinearGradient
+            colors={['#5B5FFB', '#7A5CFF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ flex: 1, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}
           >
-            <Text style={styles.stickyPrimaryBtnText}>{getPrimaryButtonText()}</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' }}
+              onPress={handlePrimaryButtonPress}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.stickyPrimaryBtnText}>{getPrimaryButtonText()}</Text>
+            </TouchableOpacity>
+          </LinearGradient>
         </Animated.View>
 
         <View style={styles.stickySecondaryActions}>
-          {isOnline ? (
+          {isOnline && (
             <>
               <Animated.View style={[styles.stickySecondaryBtn, { transform: [{ scale: chatBtnScale }] }]}>
                 <TouchableOpacity
@@ -347,21 +400,16 @@ export default function LawyerProfile() {
                   style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
                   onPress={handleCallPress}
                   activeOpacity={0.8}
+                  disabled={callLoading}
                 >
-                  <Text style={styles.stickySecondaryBtnText}>Call Now</Text>
+                  {callLoading ? (
+                    <Text style={styles.stickySecondaryBtnText}>Connecting...</Text>
+                  ) : (
+                    <Text style={styles.stickySecondaryBtnText}>Call Now</Text>
+                  )}
                 </TouchableOpacity>
               </Animated.View>
             </>
-          ) : (
-            <Animated.View style={[styles.stickySecondaryBtn, { transform: [{ scale: scheduleBtnScale }] }]}>
-              <TouchableOpacity
-                style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
-                onPress={handleSchedulePress}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.stickySecondaryBtnText}>Schedule Call</Text>
-              </TouchableOpacity>
-            </Animated.View>
           )}
         </View>
       </View>
@@ -420,11 +468,16 @@ export default function LawyerProfile() {
                   style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
                   onPress={() => {
                     animateButtonPress(modalSubmitBtnScale);
-                    setTimeout(submitReview, 150);
+                    submitReview();
                   }}
                   activeOpacity={0.8}
+                  disabled={reviewLoading}
                 >
-                  <Text style={styles.modalSubmitText}>Submit Review</Text>
+                  {reviewLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.modalSubmitText}>Submit Review</Text>
+                  )}
                 </TouchableOpacity>
               </Animated.View>
             </View>
@@ -438,14 +491,15 @@ export default function LawyerProfile() {
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    backgroundColor: Colors.bgPrimary,
+    backgroundColor: '#050816',
   },
   container: {
     flex: 1,
-    backgroundColor: Colors.bgPrimary,
+    backgroundColor: '#050816',
   },
   contentContainer: {
     padding: 24,
+    paddingTop: 8,
     paddingBottom: 180, // for sticky CTA
   },
   headerContainer: {
@@ -714,11 +768,16 @@ const styles = StyleSheet.create({
   },
   availabilitySimple: {
     marginBottom: 32,
-    padding: 20,
-    backgroundColor: Colors.glassLight,
-    borderRadius: 16,
+    padding: 24,
+    backgroundColor: 'rgba(15,23,42,0.98)',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: Colors.glassMedium,
+    borderColor: 'rgba(255,255,255,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
   },
   availabilityRow: {
     flexDirection: 'row',
@@ -935,34 +994,35 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: 'bold',
   },
-  // Sticky CTA styles
+  // Sticky CTA styles - Premium
   stickyCtaContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.bgPrimary,
+    backgroundColor: 'rgba(15,23,42,0.98)',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    padding: 16,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    padding: 20,
     paddingBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 10,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 12,
   },
   stickyPrimaryBtn: {
-    backgroundColor: Colors.primary,
-    padding: 22,
+    backgroundColor: 'transparent',
+    padding: 0,
     borderRadius: 20,
     alignItems: 'center',
     marginBottom: 16,
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
   },
   stickyPrimaryBtnText: {
     color: Colors.textPrimary,
@@ -972,16 +1032,16 @@ const styles = StyleSheet.create({
   stickySecondaryActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 12,
   },
   stickySecondaryBtn: {
     flex: 1,
     borderWidth: 1.5,
-    borderColor: Colors.primary,
-    padding: 16,
-    borderRadius: 12,
+    borderColor: 'rgba(91,95,251,0.3)',
+    padding: 18,
+    borderRadius: 16,
     alignItems: 'center',
-    backgroundColor: 'rgba(79, 124, 255, 0.05)',
+    backgroundColor: 'rgba(91,95,251,0.08)',
   },
   stickySecondaryBtnText: {
     color: Colors.primary,
@@ -991,6 +1051,16 @@ const styles = StyleSheet.create({
   // Premium header styles
   premiumHeader: {
     marginBottom: 32,
+    backgroundColor: 'rgba(15,23,42,0.98)',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 10,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -1098,47 +1168,18 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     paddingHorizontal: 16,
   },
-  ratingLarge: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: Colors.gold,
-    marginBottom: 4,
-  },
-  ratingStarsLarge: {
-    fontSize: 20,
-    color: Colors.gold,
-    letterSpacing: 2,
-    marginBottom: 4,
-  },
-  ratingCountSmall: {
-    fontSize: 14,
-    color: Colors.textTertiary,
+  ratingSimple: {
+    fontSize: 16,
+    color: Colors.textSecondary,
   },
   // Pricing block styles
-  pricingBlock: {
-    backgroundColor: 'rgba(79, 124, 255, 0.08)',
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 16,
-    marginBottom: 32,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(79, 124, 255, 0.2)',
+  pricingSimple: {
+    padding: 16,
+    alignItems: 'flex-start',
   },
   pricingLabel: {
     fontSize: 14,
-    color: Colors.textTertiary,
-    marginBottom: 8,
-  },
-  pricingAmount: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  pricingUnit: {
-    fontSize: 16,
-    color: Colors.textTertiary,
+    color: Colors.textSecondary,
   },
   pricingPremium: {
     flexDirection: 'row',
@@ -1189,10 +1230,66 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     textAlign: 'center',
   },
+  // Inline stats styles
+  statsInlineContainer: {
+    marginBottom: 32,
+    paddingHorizontal: 0,
+  },
+  statsInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(15,23,42,0.98)',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  statInlineItem: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 0,
+    paddingHorizontal: 4,
+  },
+  statInlineValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  statInlineLabel: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  inlineStatDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
   // Premium sections
   sectionPremium: {
     marginBottom: 32,
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
+    backgroundColor: 'rgba(15,23,42,0.98)',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
   },
   sectionTitlePremium: {
     fontSize: 18,

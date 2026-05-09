@@ -12,17 +12,32 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { LawyerCard, mapLawyerToCardModel } from '../../components/lawyer/LawyerCard';
 import { useLawyerDataStore } from '../../store/useLawyerDataStore';
 
 const CATEGORIES = [
   'All',
-  'Criminal Law',
-  'Family Law',
-  'Corporate Law',
-  'Property Law',
-  'Civil Law',
-  'Employment Law',
+  'Criminal',
+  'Civil',
+  'Startup',
+  'Consumer',
+  'Property',
+  'Cyber Crime',
+  'Tax',
+  'Divorce',
+  'FIR',
+  'Employment',
+];
+
+const FILTER_PILLS = [
+  { key: 'online', label: 'Online Now', icon: 'wifi' },
+  { key: 'verified', label: 'Verified', icon: 'verified' },
+  { key: 'hindi', label: 'Hindi', icon: 'language' },
+  { key: 'english', label: 'English', icon: 'language' },
+  { key: 'rating', label: 'Top Rated', icon: 'star' },
+  { key: 'price', label: 'Low Fee', icon: 'attach-money' },
+  { key: 'experience', label: 'High Experience', icon: 'work' },
 ];
 
 export default function LawyersScreen() {
@@ -42,15 +57,18 @@ export default function LawyersScreen() {
     priceSort: 'none', // 'none', 'lowToHigh', 'highToLow'
     onlineOnly: false,
     minExperience: 0,
+    verifiedOnly: false,
+    hindiOnly: false,
+    englishOnly: false,
   });
 
-  // Lawyer data from store (fetched from backend)
-  const { featuredLawyers, hydrateLawyerData, isHydrating } = useLawyerDataStore();
+  // Lawyer data from store (single source of truth)
+  const { featuredLawyers, isHydrating, hydrateLawyerData } = useLawyerDataStore();
   const lawyers = featuredLawyers || [];
 
   useEffect(() => {
     hydrateLawyerData();
-  }, []);
+  }, [hydrateLawyerData]);
 
   const filteredLawyers = useMemo(() => {
     let result = lawyers.filter((lawyer) => {
@@ -75,13 +93,26 @@ export default function LawyersScreen() {
         return false;
       }
 
+      // Verified filter (mock - assuming lawyer has isVerified property)
+      if (filters.verifiedOnly && !(lawyer as any).isVerified) {
+        return false;
+      }
+
+      // Language filters (mock - assuming lawyer has languages array)
+      if (filters.hindiOnly && !(lawyer as any).languages?.includes('Hindi')) {
+        return false;
+      }
+      if (filters.englishOnly && !(lawyer as any).languages?.includes('English')) {
+        return false;
+      }
+
       // Search query filter
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
         return (
           lawyer.name.toLowerCase().includes(query) ||
           expertise.toLowerCase().includes(query) ||
-          lawyer.specializations.some(s => s.toLowerCase().includes(query))
+          lawyer.specializations.some((s: string) => s.toLowerCase().includes(query))
         );
       }
 
@@ -90,46 +121,30 @@ export default function LawyersScreen() {
 
     // Price sorting
     if (filters.priceSort === 'lowToHigh') {
-      result.sort((a, b) => a.fees.chatPerMinuteInr - b.fees.chatPerMinuteInr);
+      result.sort((a: any, b: any) => a.fees.chatPerMinuteInr - b.fees.chatPerMinuteInr);
     } else if (filters.priceSort === 'highToLow') {
-      result.sort((a, b) => b.fees.chatPerMinuteInr - a.fees.chatPerMinuteInr);
+      result.sort((a: any, b: any) => b.fees.chatPerMinuteInr - a.fees.chatPerMinuteInr);
     } else if (activeSort === 'rating') {
-      result.sort((a, b) => b.rating.average - a.rating.average);
+      result.sort((a: any, b: any) => b.rating.average - a.rating.average);
     }
 
     return result;
   }, [activeCategory, filters, searchQuery, activeSort]);
 
-  // Section data computation
-  const sectionData = useMemo(() => {
-    // Recommended Lawyers: Top rated + online
-    const recommendedLawyers = lawyers
-      .filter(lawyer => lawyer.rating.average >= 4.5 && lawyer.isOnline)
-      .slice(0, 8);
-
-    // Your Lawyers (previously consulted): Mock data - lawyers with IDs 1-4
-    const yourLawyers = lawyers
-      .filter(lawyer => ['1', '2', '3', '4'].includes(lawyer.id))
-      .slice(0, 6);
-
-    // Recent Conversations: Lawyers with high response time
-    const recentConversations = lawyers
-      .filter(lawyer => lawyer.responseTimeMinutes <= 5)
-      .sort((a, b) => a.responseTimeMinutes - b.responseTimeMinutes)
-      .slice(0, 6);
-
-    // Top Rated: Highest rated lawyers
-    const topRatedLawyers = [...lawyers]
-      .sort((a, b) => b.rating.average - a.rating.average)
-      .slice(0, 8);
-
-    return {
-      recommendedLawyers,
-      yourLawyers,
-      recentConversations,
-      topRatedLawyers,
-    };
-  }, [lawyers]);
+  const resetFilters = () => {
+    setActiveCategory('All');
+    setSearchQuery('');
+    setFilters({
+      minRating: 0,
+      priceSort: 'none',
+      onlineOnly: false,
+      minExperience: 0,
+      verifiedOnly: false,
+      hindiOnly: false,
+      englishOnly: false,
+    });
+    setActiveSort('rating');
+  };
 
   const renderItem = ({ item }: { item: typeof lawyers[0] }) => (
     <LawyerCard
@@ -141,26 +156,7 @@ export default function LawyersScreen() {
     />
   );
 
-  const renderHorizontalSection = (title: string, data: typeof lawyers) => (
-    <View style={styles.sectionContainer}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <TouchableOpacity>
-          <Text style={styles.sectionSeeAll}>See all</Text>
-        </TouchableOpacity>
-      </View>
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={data}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.horizontalListContent}
-      />
-    </View>
-  );
-
-  // Show loading indicator while hydrating and no lawyers yet
+  // Show loading indicator while isHydrating and no lawyers yet
   if (isHydrating && lawyers.length === 0) {
     return (
       <SafeAreaView style={styles.root}>
@@ -199,18 +195,11 @@ export default function LawyersScreen() {
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
-            {searchQuery !== '' && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <MaterialIcons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            )}
           </View>
-          <TouchableOpacity style={styles.filterIconButton}>
-            <MaterialIcons name="filter-list" size={24} color="#fff" />
-          </TouchableOpacity>
         </View>
       </View>
 
+      {/* Category Chips - Horizontal Scroll */}
       <View style={styles.filtersScroll}>
         <FlatList
           horizontal
@@ -225,6 +214,8 @@ export default function LawyersScreen() {
                 activeCategory === item && styles.categoryChipActive
               ]}
               onPress={() => setActiveCategory(item)}
+              activeOpacity={0.85}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={[
                 styles.categoryText,
@@ -237,196 +228,113 @@ export default function LawyersScreen() {
         />
       </View>
 
-      {/* Zomato-style filter chips */}
+      {/* Filter Pills Row - Premium Compact Chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.filterChipsScroll}
-        contentContainerStyle={styles.filterChipsContainer}
+        style={styles.filterPillsScroll}
+        contentContainerStyle={styles.filterPillsContainer}
       >
-        <TouchableOpacity
-          style={[
-            styles.filterChip,
-            filters.minRating >= 4 && styles.filterChipActive
-          ]}
-          onPress={() => setFilters(prev => ({
-            ...prev,
-            minRating: prev.minRating >= 4 ? 0 : 4
-          }))}
-        >
-          <MaterialIcons
-            name="star"
-            size={16}
-            color={filters.minRating >= 4 ? "#4F46E5" : "#94A3B8"}
-          />
-          <Text style={[
-            styles.filterChipText,
-            filters.minRating >= 4 && styles.filterChipTextActive
-          ]}>
-            Rating 4+
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterChip,
-            filters.priceSort === 'lowToHigh' && styles.filterChipActive
-          ]}
-          onPress={() => setFilters(prev => ({
-            ...prev,
-            priceSort: prev.priceSort === 'lowToHigh' ? 'none' : 'lowToHigh'
-          }))}
-        >
-          <MaterialIcons
-            name="arrow-upward"
-            size={16}
-            color={filters.priceSort === 'lowToHigh' ? "#4F46E5" : "#94A3B8"}
-          />
-          <Text style={[
-            styles.filterChipText,
-            filters.priceSort === 'lowToHigh' && styles.filterChipTextActive
-          ]}>
-            Price: Low to High
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterChip,
-            filters.priceSort === 'highToLow' && styles.filterChipActive
-          ]}
-          onPress={() => setFilters(prev => ({
-            ...prev,
-            priceSort: prev.priceSort === 'highToLow' ? 'none' : 'highToLow'
-          }))}
-        >
-          <MaterialIcons
-            name="arrow-downward"
-            size={16}
-            color={filters.priceSort === 'highToLow' ? "#4F46E5" : "#94A3B8"}
-          />
-          <Text style={[
-            styles.filterChipText,
-            filters.priceSort === 'highToLow' && styles.filterChipTextActive
-          ]}>
-            Price: High to Low
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterChip,
-            filters.onlineOnly && styles.filterChipActive
-          ]}
-          onPress={() => setFilters(prev => ({
-            ...prev,
-            onlineOnly: !prev.onlineOnly
-          }))}
-        >
-          <MaterialIcons
-            name="wifi"
-            size={16}
-            color={filters.onlineOnly ? "#4F46E5" : "#94A3B8"}
-          />
-          <Text style={[
-            styles.filterChipText,
-            filters.onlineOnly && styles.filterChipTextActive
-          ]}>
-            Online Only
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterChip,
-            filters.minExperience >= 5 && styles.filterChipActive
-          ]}
-          onPress={() => setFilters(prev => ({
-            ...prev,
-            minExperience: prev.minExperience >= 5 ? 0 : 5
-          }))}
-        >
-          <MaterialIcons
-            name="work"
-            size={16}
-            color={filters.minExperience >= 5 ? "#4F46E5" : "#94A3B8"}
-          />
-          <Text style={[
-            styles.filterChipText,
-            filters.minExperience >= 5 && styles.filterChipTextActive
-          ]}>
-            Exp 5+ Years
-          </Text>
-        </TouchableOpacity>
-
-        {(filters.minRating > 0 || filters.priceSort !== 'none' || filters.onlineOnly || filters.minExperience > 0) && (
-          <TouchableOpacity
-            style={styles.filterChipClear}
-            onPress={() => setFilters({
-              minRating: 0,
-              priceSort: 'none',
-              onlineOnly: false,
-              minExperience: 0,
-            })}
-          >
-            <MaterialIcons name="close" size={16} color="#EF4444" />
-            <Text style={styles.filterChipClearText}>
-              Clear Filters
-            </Text>
-          </TouchableOpacity>
-        )}
+        {FILTER_PILLS.map((pill) => {
+          const isActive =
+            (pill.key === 'rating' && filters.minRating >= 4) ||
+            (pill.key === 'price' && filters.priceSort === 'lowToHigh') ||
+            (pill.key === 'experience' && filters.minExperience >= 10) ||
+            (pill.key === 'online' && filters.onlineOnly) ||
+            (pill.key === 'verified' && filters.verifiedOnly) ||
+            (pill.key === 'hindi' && filters.hindiOnly) ||
+            (pill.key === 'english' && filters.englishOnly);
+          
+          return (
+            <TouchableOpacity
+              key={pill.key}
+              style={[
+                styles.filterPill,
+                isActive && styles.filterPillActive
+              ]}
+              onPress={() => {
+                if (pill.key === 'rating') {
+                  setFilters(prev => ({
+                    ...prev,
+                    minRating: prev.minRating >= 4 ? 0 : 4
+                  }));
+                } else if (pill.key === 'price') {
+                  setFilters(prev => ({
+                    ...prev,
+                    priceSort: prev.priceSort === 'none' ? 'lowToHigh' :
+                              prev.priceSort === 'lowToHigh' ? 'highToLow' : 'none'
+                  }));
+                } else if (pill.key === 'experience') {
+                  setFilters(prev => ({
+                    ...prev,
+                    minExperience: prev.minExperience >= 10 ? 0 : 10
+                  }));
+                } else if (pill.key === 'online') {
+                  setFilters(prev => ({
+                    ...prev,
+                    onlineOnly: !prev.onlineOnly
+                  }));
+                } else if (pill.key === 'verified') {
+                  setFilters(prev => ({
+                    ...prev,
+                    verifiedOnly: !prev.verifiedOnly
+                  }));
+                } else if (pill.key === 'hindi') {
+                  setFilters(prev => ({
+                    ...prev,
+                    hindiOnly: !prev.hindiOnly
+                  }));
+                } else if (pill.key === 'english') {
+                  setFilters(prev => ({
+                    ...prev,
+                    englishOnly: !prev.englishOnly
+                  }));
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[
+                styles.filterPillText,
+                isActive && styles.filterPillTextActive
+              ]}>
+                {pill.key === 'price' && filters.priceSort !== 'none'
+                  ? `Price ${filters.priceSort === 'lowToHigh' ? '↑' : '↓'}`
+                  : pill.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.sectionsContainer}
-      >
-        {renderHorizontalSection('Recommended Lawyers', sectionData.recommendedLawyers)}
-        {renderHorizontalSection('Your Lawyers', sectionData.yourLawyers)}
-        {renderHorizontalSection('Recent Conversations', sectionData.recentConversations)}
-        {renderHorizontalSection('Top Rated', sectionData.topRatedLawyers)}
-        
-        {/* Show filtered results when searching */}
-        {searchQuery.trim() !== '' || activeCategory !== 'All' ||
-         filters.minRating > 0 || filters.priceSort !== 'none' ||
-         filters.onlineOnly || filters.minExperience > 0 ? (
-          <View style={styles.filteredResultsSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Search Results</Text>
-              <Text style={styles.resultCount}>{filteredLawyers.length} lawyers</Text>
-            </View>
-            {filteredLawyers.length > 0 ? (
-              <FlatList
-                data={filteredLawyers}
-                keyExtractor={(item) => item.id}
-                renderItem={renderItem}
-                scrollEnabled={false}
-                contentContainerStyle={styles.verticalListContent}
-              />
-            ) : (
-              <View style={styles.emptyContainer}>
-                <MaterialIcons name="search-off" size={64} color="#334155" />
-                <Text style={styles.emptyText}>No lawyers found matching your criteria.</Text>
-                <TouchableOpacity
-                  style={styles.resetBtn}
-                  onPress={() => {
-                    setSearchQuery('');
-                    setActiveCategory('All');
-                    setFilters({
-                      minRating: 0,
-                      priceSort: 'none',
-                      onlineOnly: false,
-                      minExperience: 0,
-                    });
-                  }}
-                >
-                  <Text style={styles.resetBtnText}>Clear all filters</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+      {/* Lawyer Cards List */}
+      <FlatList
+        data={filteredLawyers}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
+        removeClippedSubviews
+        initialNumToRender={10}
+        windowSize={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="search-off" size={80} color="#4F46E5" />
+            <Text style={styles.emptyTitle}>No matching lawyers</Text>
+            <Text style={styles.emptySubtitle}>Try changing filters or search</Text>
+            <TouchableOpacity onPress={resetFilters} activeOpacity={0.8}>
+              <LinearGradient
+                colors={['#5B5FFB', '#7A5CFF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.resetButton}
+              >
+                <Text style={styles.resetButtonText}>Reset Filters</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
-        ) : null}
-      </ScrollView>
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -434,11 +342,14 @@ export default function LawyersScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#050816',
   },
   header: {
-    padding: 16,
-    gap: 16,
+    padding: 24,
+    paddingBottom: 16,
+    gap: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   titleRow: {
     flexDirection: 'row',
@@ -454,9 +365,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '800',
     color: '#fff',
+    letterSpacing: 0.5,
   },
   searchRow: {
     flexDirection: 'row',
@@ -467,99 +379,108 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
-    gap: 8,
+    backgroundColor: 'rgba(15,23,42,0.7)',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 52,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   filterIconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#1E293B',
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: 'rgba(15,23,42,0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   searchInput: {
     flex: 1,
     color: '#fff',
-    fontSize: 15,
+    fontSize: 16,
+    fontWeight: '500',
   },
   filtersScroll: {
-    marginBottom: 8,
+    marginBottom: 16,
+    marginHorizontal: 24,
   },
   categoriesContainer: {
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingHorizontal: 0,
+    gap: 10,
   },
   categoryChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#1E293B',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    height: 42,
+    borderRadius: 24,
+    backgroundColor: 'rgba(15,23,42,0.98)',
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   categoryChipActive: {
-    backgroundColor: '#4F46E520',
-    borderColor: '#4F46E5',
+    backgroundColor: 'rgba(91, 95, 251, 0.12)',
+    borderColor: '#5B5FFB',
+    borderWidth: 1.5,
+    shadowColor: '#5B5FFB',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
   categoryText: {
     color: '#94A3B8',
     fontSize: 14,
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
   categoryTextActive: {
-    color: '#4F46E5',
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  // Filter chips styles
-  filterChipsScroll: {
-    marginBottom: 16,
-    marginHorizontal: 16,
+  // Filter pills
+  filterPillsScroll: {
+    marginBottom: 24,
+    marginHorizontal: 24,
   },
-  filterChipsContainer: {
-    gap: 8,
+  filterPillsContainer: {
+    gap: 10,
   },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#1E293B',
+  filterPill: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    height: 44,
+    borderRadius: 24,
+    backgroundColor: 'rgba(15,23,42,0.98)',
     borderWidth: 1,
-    borderColor: 'transparent',
-    gap: 6,
+    borderColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
   },
-  filterChipActive: {
-    backgroundColor: '#4F46E520',
-    borderColor: '#4F46E5',
+  filterPillActive: {
+    backgroundColor: 'rgba(91, 95, 251, 0.12)',
+    borderColor: '#5B5FFB',
+    borderWidth: 1.5,
+    shadowColor: '#5B5FFB',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  filterChipText: {
+  filterPillText: {
     color: '#94A3B8',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
-  filterChipTextActive: {
-    color: '#4F46E5',
-  },
-  filterChipClear: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    gap: 6,
-  },
-  filterChipClearText: {
-    color: '#EF4444',
-    fontSize: 13,
-    fontWeight: '600',
+  filterPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   loadingContainer: {
     flex: 1,
@@ -574,72 +495,47 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   listContent: {
-    padding: 16,
-    paddingBottom: 100,
+    padding: 24,
+    paddingBottom: 120,
+    gap: 20,
+    alignItems: 'center',
   },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 100,
-    gap: 16,
+    gap: 20,
   },
-  emptyText: {
-    color: '#64748B',
-    fontSize: 16,
+  emptyTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
-  resetBtn: {
-    marginTop: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#4F46E5',
-  },
-  resetBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  // Section styles
-  sectionsContainer: {
-    paddingBottom: 100,
-  },
-  sectionContainer: {
-    marginTop: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  sectionSeeAll: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4F46E5',
-  },
-  resultCount: {
-    fontSize: 14,
-    fontWeight: '600',
+  emptySubtitle: {
     color: '#94A3B8',
+    fontSize: 15,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+    lineHeight: 22,
   },
-  horizontalListContent: {
-    paddingHorizontal: 16,
-    gap: 12,
+  resetButton: {
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 10,
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  verticalListContent: {
-    paddingHorizontal: 16,
-    gap: 16,
-  },
-  filteredResultsSection: {
-    marginTop: 32,
-    marginBottom: 40,
+  resetButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

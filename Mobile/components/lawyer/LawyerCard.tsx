@@ -1,24 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
+import { Spacing, Radius, Shadow } from '../../constants/spacing';
+import { T } from '../../constants/typography';
 import type { Lawyer } from '../../constants/mockData';
-import { Avatar } from '../ui/Avatar';
-
-const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-} as const;
-
-const RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-} as const;
 
 export type LawyerCardModel = {
   id: string;
@@ -78,10 +65,9 @@ type Props = {
 
 export function LawyerCard({ data, onPress, onCtaPress }: Props) {
   const isOnline = data.availability === 'online';
-  const ctaLabel = isOnline ? 'Join Queue' : 'Book Now';
   const availabilityText = isOnline
     ? data.nextAvailableIn > 0
-      ? `Available in ${data.nextAvailableIn} mins`
+      ? `Available in ${data.nextAvailableIn} min`
       : 'Available now'
     : 'Offline';
 
@@ -92,254 +78,198 @@ export function LawyerCard({ data, onPress, onCtaPress }: Props) {
   };
 
   return (
-    <Pressable style={styles.cardContainer} onPress={onPress}>
+    <TouchableOpacity style={styles.cardContainer} onPress={onPress} activeOpacity={0.85} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
+      {/* Subtle inner glow overlay */}
       <LinearGradient
-        colors={['#0B1220', '#111827', '#0B1220']}
+        colors={['rgba(91, 95, 251, 0.03)', 'rgba(122, 92, 255, 0.01)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.card}
-      >
-        {/* Avatar with online badge */}
-        <View style={styles.avatarContainer}>
-          <Avatar
-            name={data.name}
-            initials={data.initials}
-            color={data.avatarColor}
-            size={64}
-            verified={data.verified}
-            online={false} // we'll handle badge ourselves
-          />
-          {isOnline && <View style={styles.onlineDot} />}
-          {data.verified && (
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✓</Text>
+        style={styles.innerGlow}
+      />
+      <View style={styles.card}>
+        {/* Row 1: Avatar + Name + Online Dot */}
+        <View style={styles.row1}>
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatar, { backgroundColor: data.avatarColor }]}>
+              <Text style={styles.avatarText}>{data.initials}</Text>
             </View>
-          )}
-        </View>
-
-        {/* Main content */}
-        <View style={styles.content}>
-          {/* Name row */}
-          <View style={styles.nameRow}>
-            <Text style={styles.name} numberOfLines={1}>{data.name}</Text>
-            <View style={styles.experienceBadge}>
-              <Text style={styles.experienceText}>{data.experience}y</Text>
-            </View>
+            {isOnline && <View style={styles.onlineDot} />}
           </View>
-
-          {/* Details */}
-          <Text style={styles.details}>
-            {data.city} • {data.specialization} • {data.courtLabel}
-          </Text>
-
-          {/* Rating & Price row */}
-          <View style={styles.ratingPriceRow}>
-            <View style={styles.ratingContainer}>
-              <Text style={styles.ratingStar}>⭐</Text>
-              <Text style={styles.ratingText}>{data.ratingAverage.toFixed(1)}</Text>
-              <Text style={styles.reviewCount}>({data.totalReviews} reviews)</Text>
-            </View>
-            <View style={styles.priceContainer}>
-              <Text style={styles.price}>₹{data.chatPerMinuteInr}</Text>
-              <Text style={styles.priceUnit}>/min</Text>
-            </View>
-          </View>
-
-          {/* Availability & Response Time */}
-          <View style={styles.availabilityRow}>
-            <View style={[styles.availabilityBadge, isOnline ? styles.onlineBadge : styles.offlineBadge]}>
-              <Text style={styles.availabilityText}>{availabilityText}</Text>
-            </View>
-            <Text style={styles.responseTime}>Response: {data.responseTimeMinutes} min</Text>
+          <View style={styles.nameContainer}>
+            <Text style={styles.name} numberOfLines={2}>{data.name}</Text>
+            <Text style={styles.specialization}>{data.specialization}</Text>
           </View>
         </View>
-      </LinearGradient>
 
-      {/* CTA Button - separate Pressable to avoid triggering card press */}
-      <Pressable style={styles.ctaContainer} onPress={handleCtaPress}>
-        <LinearGradient
-          colors={isOnline ? ['#7C3AED', '#6D28D9'] : ['#4B5563', '#374151']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+        {/* Row 2: Rating + Reviews */}
+        <View style={styles.ratingRow}>
+          <MaterialIcons name="star" size={14} color={Colors.gold} />
+          <Text style={styles.ratingText}>{data.ratingAverage.toFixed(1)}</Text>
+          <Text style={styles.reviewCount}>• {data.totalReviews} reviews</Text>
+        </View>
+
+        {/* Row 3: Availability + Price */}
+        <View style={styles.bottomRow}>
+          <View style={[
+            styles.availabilityBadge,
+            isOnline ? styles.availabilityOnline : styles.availabilityOffline
+          ]}>
+            <Text style={styles.availabilityText}>{availabilityText}</Text>
+          </View>
+          <Text style={styles.price}>₹{data.chatPerMinuteInr}/min</Text>
+        </View>
+
+        {/* Row 4: Consult Now Button */}
+        <TouchableOpacity
           style={styles.ctaButton}
+          onPress={handleCtaPress}
+          activeOpacity={0.85}
+          hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
         >
-          <Text style={styles.ctaText}>{ctaLabel}</Text>
-        </LinearGradient>
-      </Pressable>
-    </Pressable>
+          <LinearGradient
+            colors={['#5B5FFB', '#7A5CFF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.gradientButton}
+          >
+            <Text style={styles.ctaText}>Consult Now</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   cardContainer: {
-    marginBottom: SPACING.lg,
-    borderRadius: RADIUS.xl,
+    width: 260,
+    height: 200,
+    borderRadius: Radius.card,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadow.elevated,
+    marginHorizontal: Spacing.xs,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    position: 'relative',
+  },
+  innerGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: Radius.card,
+    zIndex: 1,
   },
   card: {
-    padding: SPACING.lg,
+    padding: 20,
+    flex: 1,
+    justifyContent: 'space-between',
+    zIndex: 2,
+    position: 'relative',
+  },
+  row1: {
     flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 200,
+    alignItems: 'flex-start',
+    gap: Spacing.md,
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: SPACING.lg,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
   onlineDot: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    bottom: Spacing.xs,
+    right: Spacing.xs,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: Colors.success,
     borderWidth: 2,
-    borderColor: '#0B1220',
-    zIndex: 10,
+    borderColor: Colors.bgSecondary,
   },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.primary,
-    borderWidth: 2,
-    borderColor: '#0B1220',
-    zIndex: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  verifiedText: {
-    color: Colors.textPrimary,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  content: {
+  nameContainer: {
     flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.xs,
   },
   name: {
+    ...T.h4,
     color: Colors.textPrimary,
-    fontSize: 18,
-    fontWeight: 'bold',
-    flex: 1,
+    marginBottom: Spacing.xs,
   },
-  experienceBadge: {
-    backgroundColor: 'rgba(245, 166, 35, 0.15)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: Colors.goldSubtle,
-  },
-  experienceText: {
-    color: Colors.gold,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  details: {
+  specialization: {
+    ...T.bodySm,
     color: Colors.textSecondary,
-    fontSize: 13,
-    marginBottom: SPACING.md,
-    lineHeight: 18,
   },
-  ratingPriceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  ratingContainer: {
+  ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  ratingStar: {
-    fontSize: 14,
-    marginRight: 4,
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
   },
   ratingText: {
+    ...T.bodySm,
     color: Colors.gold,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginRight: 4,
+    fontWeight: '600',
   },
   reviewCount: {
+    ...T.caption,
     color: Colors.textTertiary,
-    fontSize: 12,
   },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  price: {
-    color: Colors.textPrimary,
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  priceUnit: {
-    color: Colors.textTertiary,
-    fontSize: 12,
-    marginLeft: 2,
-  },
-  availabilityRow: {
+  bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: Spacing.sm,
   },
   availabilityBadge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: RADIUS.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.chip,
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
   },
-  onlineBadge: {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    borderWidth: 1,
-    borderColor: Colors.successSubtle,
+  availabilityOnline: {
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
   },
-  offlineBadge: {
-    backgroundColor: 'rgba(107, 115, 142, 0.15)',
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+  availabilityOffline: {
+    backgroundColor: 'rgba(148, 163, 184, 0.12)',
   },
   availabilityText: {
-    fontSize: 12,
+    ...T.captionSm,
+    color: Colors.success,
     fontWeight: '600',
   },
-  onlineText: {
-    color: Colors.success,
-  },
-  offlineText: {
-    color: Colors.textTertiary,
-  },
-  responseTime: {
-    color: Colors.textTertiary,
-    fontSize: 12,
-  },
-  ctaContainer: {
-    marginTop: 1,
+  price: {
+    ...T.h4,
+    color: Colors.textPrimary,
   },
   ctaButton: {
-    height: 52,
+    height: 46,
+    width: '100%',
+    borderRadius: Radius.button,
+    overflow: 'hidden',
+    marginTop: Spacing.md,
+    ...Shadow.glow,
+  },
+  gradientButton: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: RADIUS.lg,
   },
   ctaText: {
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontWeight: 'bold',
+    ...T.button,
+    color: '#fff',
+    letterSpacing: 0.3,
   },
 });

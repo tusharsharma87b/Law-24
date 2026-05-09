@@ -1,5 +1,8 @@
 import { apiGet, apiPost } from './api';
 
+// Enable mock OTP in development for testing
+const USE_MOCK_OTP = __DEV__ && true; // Set to false to use real API
+
 type VerifyOtpResponse = {
   success?: boolean;
   verifySuccess?: boolean;
@@ -29,6 +32,19 @@ type SendOtpResponse = {
 };
 
 export async function sendOtp(target: string, channel: 'phone' | 'email' = 'phone'): Promise<SendOtpResponse> {
+  // Mock OTP for development
+  if (USE_MOCK_OTP) {
+    console.log('[AuthService] Using mock OTP for development');
+    const mockOtp = '123456';
+    const mockResponse: SendOtpResponse = {
+      success: true,
+      expiresInSec: 300,
+      devOtp: mockOtp,
+    };
+    console.log('[AuthService] Mock OTP response:', mockResponse);
+    return mockResponse;
+  }
+
   try {
     console.log('[AuthService] Sending OTP to:', target, 'channel:', channel);
     

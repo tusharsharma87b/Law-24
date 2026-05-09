@@ -14,13 +14,17 @@ import {
   Platform,
   Keyboard,
   BackHandler,
+  FlatList,
+  Image,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { LAWYERS } from '../../data/lawyers';
+import { Spacing, ScreenSpacing, CardSpacing, SectionSpacing, Radius, Shadow } from '../../constants/spacing';
+import { T } from '../../constants/typography';
 import { useAuthStore } from '../../store/useAuthStore';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { LawyerCard, mapLawyerToCardModel } from '../../components/lawyer/LawyerCard';
@@ -74,18 +78,24 @@ export default function HomeScreen() {
   const viewportWidth = Platform.OS === 'web' ? Math.min(SCREEN_WIDTH, 430) : screenWidth;
   const categoryCardWidth = viewportWidth / 4.8;
   const categoryCardHeight = 88;
-  const expertCardWidth = viewportWidth * 0.6;
-  const topCardWidth = viewportWidth * 0.6;
-  const listGap = 12;
+  const expertCardWidth = 260; // Premium card width
+  const topCardWidth = 260; // Premium card width
+  const listGap = 16;
 
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
   const HOME_LEGAL_CATEGORIES = [
-    { id: "1", title: "Police / FIR", type: "Criminal", icon: "gavel" },
-    { id: "2", title: "Family / Divorce", type: "Family", icon: "people" },
-    { id: "3", title: "Property Dispute", type: "Property", icon: "home" },
-    { id: "4", title: "Job Issues", type: "Employment", icon: "briefcase" }
+    { id: "1", title: "Criminal", type: "Criminal", icon: "gavel", color: "#F85149" },
+    { id: "2", title: "Civil", type: "Civil", icon: "balance", color: "#F5A623" },
+    { id: "3", title: "Startup", type: "Corporate", icon: "business", color: "#A78BFA" },
+    { id: "4", title: "Consumer", type: "Consumer", icon: "shopping-cart", color: "#3FB950" },
+    { id: "5", title: "Property", type: "Property", icon: "home", color: "#60A5FA" },
+    { id: "6", title: "Cyber Crime", type: "Cyber", icon: "security", color: "#8B5CF6" },
+    { id: "7", title: "Tax", type: "Tax", icon: "attach-money", color: "#34D399" },
+    { id: "8", title: "Divorce", type: "Family", icon: "people", color: "#FF9F43" },
+    { id: "9", title: "FIR", type: "Criminal", icon: "local-police", color: "#F85149" },
+    { id: "10", title: "Employment", type: "Employment", icon: "briefcase", color: "#58A6FF" },
   ];
 
   if (!HOME_LEGAL_CATEGORIES) return null;
@@ -102,8 +112,8 @@ export default function HomeScreen() {
   const [activeTopRated, setActiveTopRated] = useState(0);
   const [activeCategory, setActiveCategory] = useState(0);
 
-  const liveExperts = LAWYERS.filter((l) => l.isOnline);
-  const topRated = [...LAWYERS].sort((a, b) => b.rating.average - a.rating.average);
+  const liveExperts = featuredLawyers ? featuredLawyers.filter((l) => l.isOnline) : [];
+  const topRated = featuredLawyers ? [...featuredLawyers].sort((a, b) => b.rating.average - a.rating.average) : [];
 
   const [searchText, setSearchText] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -151,13 +161,21 @@ export default function HomeScreen() {
 
   const handleCategoryPress = (item: any) => {
     const categoryMap: Record<string, string> = {
-      "Police / FIR": "Criminal Law",
-      "Family / Divorce": "Family Law",
-      "Property Dispute": "Property Law",
-      "Job Issues": "Employment Law",
+      "Criminal Law": "Criminal Law",
+      "Civil Law": "Civil Law",
+      "Startup Legal": "Corporate Law",
+      "Tax & GST": "Tax Law",
+      "Cyber Crime": "Cyber Law",
+      "Consumer Court": "Consumer Law",
+      "Property": "Property Law",
+      "Employment": "Employment Law",
+      "Divorce": "Family Law",
+      "FIR / Police": "Criminal Law",
+      "Documentation": "Document Law",
+      "Court Matter": "Court Law",
     };
 
-    const selectedCategory = categoryMap[item.title];
+    const selectedCategory = categoryMap[item.title] || item.title;
 
     // 🔥 DIRECTLY GO TO LAWYERS (NOT legal-category)
     router.push({
@@ -190,11 +208,11 @@ export default function HomeScreen() {
                 Law<Text style={s.logoAccent}>24</Text>
               </Text>
               <View style={s.headerIcons}>
-                <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/profile/add-money')} activeOpacity={0.7}>
+                <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/profile/add-money')} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <MaterialIcons name="account-balance-wallet" size={20} color={Colors.gold} />
                   <Text style={s.walletAmt}>₹{balance.toLocaleString('en-IN')}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.iconBtn} onPress={() => setNotifSheetOpen(true)} activeOpacity={0.7}>
+                <TouchableOpacity style={s.iconBtn} onPress={() => setNotifSheetOpen(true)} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <MaterialIcons name="notifications-none" size={22} color={Colors.textPrimary} />
                   {unreadCount > 0 && (
                     <View style={s.bellBadge}>
@@ -240,7 +258,7 @@ export default function HomeScreen() {
                   onSubmitEditing={() => handleSearch(searchText)}
                 />
               </View>
-              <TouchableOpacity style={s.micBtn}>
+              <TouchableOpacity style={s.micBtn} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <MaterialIcons name="mic-none" size={20} color={Colors.textTertiary} />
               </TouchableOpacity>
             </View>
@@ -259,61 +277,53 @@ export default function HomeScreen() {
 
             <View style={s.section}>
               <SectionHeader title="Top Categories" onAction={() => router.push('/legal-categories')} />
-              <Animated.FlatList
+              <FlatList
                 data={HOME_LEGAL_CATEGORIES}
                 keyExtractor={(item) => item.id}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={s.catListFullBleed}
                 contentContainerStyle={s.catListContainer}
-                onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: categoryScrollX } } }], {
-                  useNativeDriver: false,
+                snapToAlignment="start"
+                decelerationRate="fast"
+                snapToInterval={100 + 12}
+                bounces={false}
+                removeClippedSubviews
+                initialNumToRender={5}
+                windowSize={5}
+                ListFooterComponent={<View style={{ width: 16 }} />}
+                getItemLayout={(_, index) => ({
+                  length: 100 + 12,
+                  offset: (100 + 12) * index,
+                  index,
                 })}
-                scrollEventThrottle={16}
-                renderItem={({ item, index }) => {
-                  const inputRange = [(index - 1) * 100, index * 100, (index + 1) * 100];
-                  const scale = categoryScrollX.interpolate({ inputRange, outputRange: [0.95, 1, 0.95], extrapolate: 'clamp' });
-                  const opacity = categoryScrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
-
-                  return (
-                    <Animated.View
-                      style={[
-                        s.catCardWrap,
-                        {
-                          width: categoryCardWidth,
-                          opacity,
-                          transform: [{ scale }],
-                        },
-                        index === activeCategory && s.activeGlow,
-                      ]}
-                    >
-                      <TouchableOpacity
-                        style={[s.catCard, { height: categoryCardHeight }]}
-                        activeOpacity={0.8}
-                        onPress={() => handleCategoryPress(item)}
-                      >
-                        <View style={[s.catIcon, { backgroundColor: '#4F46E522' }]}>
-                          <MaterialIcons name={item.icon as any} size={18} color="#4F46E5" />
-                        </View>
-                        <Text style={s.catLabel} numberOfLines={2}>
-                          {item.title}
-                        </Text>
-                      </TouchableOpacity>
-                    </Animated.View>
-                  );
-                }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={s.catCard}
+                    activeOpacity={0.8}
+                    onPress={() => handleCategoryPress(item)}
+                    hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
+                  >
+                    <View style={[s.catIcon, { backgroundColor: `${item.color}22` }]}>
+                      <MaterialIcons name={item.icon as any} size={20} color={item.color} />
+                    </View>
+                    <Text style={s.catLabel} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               />
             </View>
 
             {/* Nyaya AI Premium Card */}
             <View style={s.nyayaCard}>
               <LinearGradient
-                colors={['#1E293B', '#0F172A']}
+                colors={['rgba(15,23,42,0.98)', 'rgba(10,15,30,0.98)']}
                 style={s.nyayaGradient}
               >
                 <View style={s.nyayaHeader}>
                   <View style={s.nyayaIconWrap}>
-                    <MaterialIcons name="auto-awesome" size={24} color={Colors.gold} />
+                    <MaterialIcons name="auto-awesome" size={28} color={Colors.gold} />
                   </View>
                   <View>
                     <Text style={s.nyayaTitle}>NyayaAI</Text>
@@ -327,26 +337,32 @@ export default function HomeScreen() {
 
                 <View style={s.nyayaPoints}>
                   <View style={s.nyayaPoint}>
-                    <MaterialIcons name="check-circle" size={14} color={Colors.success} />
+                    <MaterialIcons name="check-circle" size={16} color={Colors.success} />
                     <Text style={s.nyayaPointTxt}>Understand your situation clearly</Text>
                   </View>
                   <View style={s.nyayaPoint}>
-                    <MaterialIcons name="check-circle" size={14} color={Colors.success} />
+                    <MaterialIcons name="check-circle" size={16} color={Colors.success} />
                     <Text style={s.nyayaPointTxt}>Know your legal rights</Text>
                   </View>
                   <View style={s.nyayaPoint}>
-                    <MaterialIcons name="check-circle" size={14} color={Colors.success} />
+                    <MaterialIcons name="check-circle" size={16} color={Colors.success} />
                     <Text style={s.nyayaPointTxt}>Get actionable next steps</Text>
                   </View>
                 </View>
 
                 <TouchableOpacity
-                  style={s.nyayaBtn}
                   onPress={() => router.push('/nyaya')}
                   activeOpacity={0.8}
                 >
-                  <Text style={s.nyayaBtnTxt}>Start Case Analysis</Text>
-                  <MaterialIcons name="arrow-forward" size={18} color="#fff" />
+                  <LinearGradient
+                    colors={['#5B5FFB', '#7A5CFF']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={s.nyayaBtn}
+                  >
+                    <Text style={s.nyayaBtnTxt}>Start Case Analysis</Text>
+                    <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+                  </LinearGradient>
                 </TouchableOpacity>
               </LinearGradient>
             </View>
@@ -395,9 +411,7 @@ export default function HomeScreen() {
                   return (
                     <Animated.View
                       style={[
-                        s.expertCard,
                         { width: expertCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
-                        index === activeExpert && s.activeGlow,
                       ]}
                     >
                       <LawyerCard
@@ -452,9 +466,7 @@ export default function HomeScreen() {
                   return (
                     <Animated.View
                       style={[
-                        s.topCard,
                         { width: topCardWidth, marginRight: listGap, opacity, transform: [{ scale }] },
-                        index === activeTopRated && s.activeGlow,
                       ]}
                     >
                       <LawyerCard
@@ -601,10 +613,10 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bgPrimary, overflow: 'hidden' },
   fixedTop: {
     backgroundColor: Colors.bgPrimary,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: ScreenSpacing.horizontal,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: Colors.border,
     zIndex: 10,
   },
   header: {
@@ -614,11 +626,11 @@ const s = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10,
   },
-  logo: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary, letterSpacing: 0.3 },
+  logo: { ...T.h2, fontSize: 22, letterSpacing: 0.3 },
   logoAccent: { color: Colors.primary },
-  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  iconBtn: { position: 'relative', padding: 7, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  walletAmt: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  iconBtn: { position: 'relative', padding: 7, flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  walletAmt: { ...T.captionSm, color: Colors.textSecondary, fontWeight: '700' },
   bellBadge: {
     position: 'absolute',
     top: 4,
@@ -637,28 +649,35 @@ const s = StyleSheet.create({
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.bgSecondary,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 44,
-    gap: 10,
+    backgroundColor: Colors.glassMedium,
+    borderRadius: Radius.input,
+    paddingHorizontal: CardSpacing.compact,
+    height: 52,
+    gap: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
     zIndex: 10,
+    ...Platform.select({
+      web: { backdropFilter: 'blur(10px)' },
+    }),
   },
-  searchRowFocused: { borderColor: Colors.primary, backgroundColor: '#0A0F1E' },
+  searchRowFocused: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.glassDark,
+    ...Shadow.glow,
+  },
   searchInputWrap: { flex: 1, justifyContent: 'center' },
   searchPlaceholder: {
     position: 'absolute',
-    fontSize: 13,
+    ...T.bodySm,
     color: Colors.textTertiary,
     pointerEvents: 'none',
   },
-  searchInput: { flex: 1, color: Colors.textPrimary, fontSize: 13, paddingVertical: 0 },
+  searchInput: { flex: 1, color: Colors.textPrimary, ...T.body, paddingVertical: 0 },
   micBtn: { padding: 2 },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100 },
-  greeting: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary, marginBottom: 16 },
+  content: { paddingHorizontal: ScreenSpacing.horizontal, paddingTop: 24, paddingBottom: 100 },
+  greeting: { ...T.h4, marginBottom: SectionSpacing.small, letterSpacing: 0.3 },
   suggestionsWrapper: {
     position: 'absolute',
     top: 110,
@@ -788,24 +807,42 @@ const s = StyleSheet.create({
   },
   routeCardTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   routeCardSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  section: { marginBottom: 20 },
-  listFullBleed: { marginTop: 14, marginHorizontal: -16 },
-  listContainer: { paddingHorizontal: 16 },
-  catListFullBleed: { marginTop: 14, marginHorizontal: -16 },
-  catListContainer: { paddingLeft: 16, paddingRight: 6 },
-  catCardWrap: { marginRight: 10 },
+  section: { marginBottom: 32 },
+  listFullBleed: { marginTop: 16, overflow: 'visible' },
+  listContainer: { paddingHorizontal: 24, paddingRight: 24, overflow: 'visible' },
+  catListFullBleed: { marginTop: 16 },
+  catListContainer: { paddingHorizontal: 24, paddingRight: 4, gap: 12 },
   catCard: {
+    width: 100,
+    height: 88,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
+    paddingHorizontal: 12,
     backgroundColor: Colors.bgSecondary,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     borderWidth: 1,
     borderColor: Colors.border,
-    gap: 6,
+    marginRight: Spacing.md,
+    gap: Spacing.sm,
+    ...Shadow.elevated,
   },
-  catIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  catLabel: { fontSize: 11, color: Colors.textPrimary, fontWeight: '500', textAlign: 'center' },
+  catIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginBottom: 4,
+  },
+  catLabel: {
+    fontSize: 11,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 13,
+    letterSpacing: 0.2,
+  },
   dropdown: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 105 : 100,
@@ -843,42 +880,112 @@ const s = StyleSheet.create({
   dropTitle: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
   dropDesc: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
   dropText: { color: Colors.textSecondary, fontSize: 13 },
-  nyayaCard: { marginBottom: 24, borderRadius: 20, overflow: 'hidden' },
-  nyayaGradient: { padding: 20 },
+  nyayaCard: {
+    marginBottom: 24,
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(15,23,42,0.98)',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 16,
+  },
+  nyayaGradient: { padding: 24 },
   nyayaHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
   nyayaIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(245,166,35,0.1)',
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(245,166,35,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(245,166,35,0.2)',
   },
-  nyayaTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary, letterSpacing: 0.5 },
-  nyayaTag: { fontSize: 11, color: Colors.gold, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
-  nyayaDesc: { fontSize: 14, color: Colors.textSecondary, lineHeight: 22, marginBottom: 18 },
-  nyayaPoints: { gap: 10, marginBottom: 20 },
-  nyayaPoint: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  nyayaPointTxt: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500' },
+  nyayaTitle: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: 0.5 },
+  nyayaTag: { fontSize: 12, color: Colors.gold, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.2, marginTop: 2 },
+  nyayaDesc: { fontSize: 15, color: Colors.textSecondary, lineHeight: 24, marginBottom: 20, marginTop: 8 },
+  nyayaPoints: { gap: 12, marginBottom: 24 },
+  nyayaPoint: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  nyayaPointTxt: { fontSize: 14, color: Colors.textPrimary, fontWeight: '500', flex: 1 },
   nyayaBtn: {
-    backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 10,
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  nyayaBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  expertCard: { alignItems: 'stretch' },
-  topCard: { alignItems: 'stretch' },
+  nyayaBtnTxt: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
+  homeLawyerRow1: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  homeLawyerName: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  homeLawyerDetails: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  homeLawyerRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  homeLawyerRatingText: {
+    color: Colors.gold,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  homeLawyerAvailability: {
+    color: Colors.success,
+    fontSize: 13,
+  },
+  homeLawyerButton: {
+    height: 44,
+    width: '100%',
+    backgroundColor: '#2563EB',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  homeLawyerButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  expertCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'stretch',
+  },
+  topCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'stretch',
+  },
   activeGlow: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },

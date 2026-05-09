@@ -1,7 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Avatar } from '../ui/Avatar';
 import { Colors } from '../../constants/colors';
 import type { DirectoryLawyer } from '../../constants/lawyersDirectory';
 import { AppIcon } from '../ui/AppIcon';
