@@ -95,7 +95,7 @@ export default function HomeScreen() {
     { id: "7", title: "Tax", type: "Tax", icon: "attach-money", color: "#34D399" },
     { id: "8", title: "Divorce", type: "Family", icon: "people", color: "#FF9F43" },
     { id: "9", title: "FIR", type: "Criminal", icon: "local-police", color: "#F85149" },
-    { id: "10", title: "Employment", type: "Employment", icon: "briefcase", color: "#58A6FF" },
+    { id: "10", title: "Employment", type: "Employment", icon: "work", color: "#58A6FF" },
   ];
 
   if (!HOME_LEGAL_CATEGORIES) return null;
