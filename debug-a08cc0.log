@@ -143,3 +143,43 @@
 {"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H24","location":"run-mobile.cmd","message":"LAN IP detection removed due command parser incompatibility","data":{"port":"62355"},"timestamp":0}
 {"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H19","location":"run-mobile.cmd","message":"Forcing Expo Go client mode","data":{"mode":"go"},"timestamp":0}
 {"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H22","location":"run-mobile.cmd","message":"Clearing Metro cache for mobile load reliability","data":{"clear":true},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H-shim","location":"nxp.cmd","message":"nxp shim invoked","data":{"rawArgs":"expo go"},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H32","location":"nxp.cmd","message":"Routing expo go through run-mobile.cmd for stable Expo Go behavior","data":{},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H11","location":"run-mobile.cmd","message":"Project launcher started","data":{"mobile":"C:\Users\mohit\OneDrive\Documents\GitHub\Law-24\Mobile","nodejs":"C:\Program Files\nodejs"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H27","location":"run-mobile.cmd","message":"Starting Expo in tunnel mode for cross-network mobile access","data":{"port":"62625","host":"tunnel"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H24","location":"run-mobile.cmd","message":"LAN IP detection removed due command parser incompatibility","data":{"port":"62625"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H19","location":"run-mobile.cmd","message":"Forcing Expo Go client mode","data":{"mode":"go"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H22","location":"run-mobile.cmd","message":"Clearing Metro cache for mobile load reliability","data":{"clear":true},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H18","location":"run-mobile.cmd","message":"Tunnel failed, falling back to LAN mode","data":{"port":"62625","host":"lan"},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H-shim","location":"nxp.cmd","message":"nxp shim invoked","data":{"rawArgs":"expo go"},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H32","location":"nxp.cmd","message":"Routing expo go through run-mobile.cmd for stable Expo Go behavior","data":{},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H11","location":"run-mobile.cmd","message":"Project launcher started","data":{"mobile":"C:\Users\mohit\OneDrive\Documents\GitHub\Law-24\Mobile","nodejs":"C:\Program Files\nodejs"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H27","location":"run-mobile.cmd","message":"Starting Expo in tunnel mode for cross-network mobile access","data":{"port":"61984","host":"tunnel"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H24","location":"run-mobile.cmd","message":"LAN IP detection removed due command parser incompatibility","data":{"port":"61984"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H19","location":"run-mobile.cmd","message":"Forcing Expo Go client mode","data":{"mode":"go"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H22","location":"run-mobile.cmd","message":"Clearing Metro cache for mobile load reliability","data":{"clear":true},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H18","location":"run-mobile.cmd","message":"Tunnel failed, falling back to LAN mode","data":{"port":"61984","host":"lan"},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H-shim","location":"nxp.cmd","message":"nxp shim invoked","data":{"rawArgs":"expo go"},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H32","location":"nxp.cmd","message":"Routing expo go through run-mobile.cmd for stable Expo Go behavior","data":{},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H11","location":"run-mobile.cmd","message":"Project launcher started","data":{"mobile":"C:\Users\mohit\OneDrive\Documents\GitHub\Law-24\Mobile","nodejs":"C:\Program Files\nodejs"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H27","location":"run-mobile.cmd","message":"Starting Expo in tunnel mode for cross-network mobile access","data":{"port":"53883","host":"tunnel"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H24","location":"run-mobile.cmd","message":"LAN IP detection removed due command parser incompatibility","data":{"port":"53883"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H19","location":"run-mobile.cmd","message":"Forcing Expo Go client mode","data":{"mode":"go"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H22","location":"run-mobile.cmd","message":"Clearing Metro cache for mobile load reliability","data":{"clear":true},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H18","location":"run-mobile.cmd","message":"Tunnel failed, falling back to LAN mode","data":{"port":"53883","host":"lan"},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H-shim","location":"nxp.cmd","message":"nxp shim invoked","data":{"rawArgs":"expo go"},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H32","location":"nxp.cmd","message":"Routing expo go through run-mobile.cmd for stable Expo Go behavior","data":{},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H11","location":"run-mobile.cmd","message":"Project launcher started","data":{"mobile":"C:\Users\mohit\OneDrive\Documents\GitHub\Law-24\Mobile","nodejs":"C:\Program Files\nodejs"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H27","location":"run-mobile.cmd","message":"Starting Expo in tunnel mode for cross-network mobile access","data":{"port":"63040","host":"tunnel"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H24","location":"run-mobile.cmd","message":"LAN IP detection removed due command parser incompatibility","data":{"port":"63040"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H19","location":"run-mobile.cmd","message":"Forcing Expo Go client mode","data":{"mode":"go"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H22","location":"run-mobile.cmd","message":"Clearing Metro cache for mobile load reliability","data":{"clear":true},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H18","location":"run-mobile.cmd","message":"Tunnel failed, falling back to LAN mode","data":{"port":"63040","host":"lan"},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H-shim","location":"nxp.cmd","message":"nxp shim invoked","data":{"rawArgs":"expo go"},"timestamp":0}
+{"sessionId":"a08cc0","hypothesisId":"H32","location":"nxp.cmd","message":"Routing expo go through run-mobile.cmd for stable Expo Go behavior","data":{},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H11","location":"run-mobile.cmd","message":"Project launcher started","data":{"mobile":"C:\Users\mohit\OneDrive\Documents\GitHub\Law-24\Mobile","nodejs":"C:\Program Files\nodejs"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H27","location":"run-mobile.cmd","message":"Starting Expo in tunnel mode for cross-network mobile access","data":{"port":"55122","host":"tunnel"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H24","location":"run-mobile.cmd","message":"LAN IP detection removed due command parser incompatibility","data":{"port":"55122"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H19","location":"run-mobile.cmd","message":"Forcing Expo Go client mode","data":{"mode":"go"},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H22","location":"run-mobile.cmd","message":"Clearing Metro cache for mobile load reliability","data":{"clear":true},"timestamp":0}
+{"sessionId":"a08cc0","runId":"run-mobile-cmd","hypothesisId":"H18","location":"run-mobile.cmd","message":"Tunnel failed, falling back to LAN mode","data":{"port":"55122","host":"lan"},"timestamp":0}
